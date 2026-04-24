@@ -1,0 +1,56 @@
+{
+  "live": {
+    "berat": 3.24,
+    "ppm": 412,
+    "suhu": 28.4,
+    "humidity": 65.0,
+    "timestamp": 1714000000000,
+    "device_id": "ESP32-LPG-01"
+  },
+
+  "raw": {
+    "-NxABC123def": {
+      "berat": 3.24,
+      "ppm": 412,
+      "suhu": 28.4,
+      "humidity": 65.0,
+      "timestamp": 1714000000000,
+      "device_id": "ESP32-LPG-01"
+    },
+    "-NxABC456ghi": {
+      "berat": 3.22,
+      "ppm": 438,
+      "suhu": 28.6,
+      "humidity": 64.0,
+      "timestamp": 1714000010000,
+      "device_id": "ESP32-LPG-01"
+    }
+  },
+
+  "history": {
+    "-NxHIST001": {
+      "berat_avg": 3.23,
+      "ppm_avg": 425.0,
+      "suhu_avg": 28.5,
+      "humidity_avg": 64.5,
+      "ppm_max": 438,
+      "ppm_min": 412,
+      "status": "AMAN",
+      "sample_count": 10,
+      "timestamp": 1714000600000,
+      "device_id": "ESP32-LPG-01"
+    },
+    "-NxHIST002": {
+      "berat_avg": 3.20,
+      "ppm_avg": 680.0,
+      "suhu_avg": 29.1,
+      "humidity_avg": 66.0,
+      "ppm_max": 720,
+      "ppm_min": 640,
+      "status": "WASPADA",
+      "sample_count": 10,
+      "timestamp": 1714001200000,
+      "device_id": "ESP32-LPG-01"
+    }
+  }
+}

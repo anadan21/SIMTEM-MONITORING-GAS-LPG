@@ -1,0 +1,27 @@
+{
+  "rules": {
+
+    "live": {
+      ".read":  true,
+      ".write": true
+    },
+
+    "raw": {
+      ".read":  true,
+      ".write": true,
+
+      "$record_id": {
+        ".validate": "newData.hasChildren(['berat','ppm','suhu','humidity','timestamp'])"
+      }
+    },
+
+    "history": {
+      ".read":  true,
+      ".write": true,
+
+      "$record_id": {
+        ".validate": "newData.hasChildren(['ppm_avg','status','timestamp'])"
+      }
+    }
+  }
+}

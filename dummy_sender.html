@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dummy Data Sender — Testing Firebase</title>
+  <style>
+    body { font-family: monospace; background: #0f1117; color: #e8eaf0; padding: 2rem; }
+    h2   { color: #22c55e; margin-bottom: 1rem; }
+    .box { background: #1a1d27; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 12px; color: #8b90a0; margin-bottom: 4px; }
+    input[type=range] { width: 100%; margin-bottom: 2px; }
+    .val  { font-size: 1.2rem; color: #e8eaf0; font-weight: 600; }
+    button { background: #22c55e; color: #000; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 1rem; }
+    button:hover { background: #16a34a; }
+    #log  { font-size: 12px; color: #8b90a0; margin-top: 1rem; max-height: 160px; overflow-y: auto; }
+    .err  { color: #ef4444; }
+    .ok   { color: #22c55e; }
+  </style>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // ---- GANTI DENGAN CONFIG FIREBASE ANDA ----
+    const firebaseConfig = {
+      apiKey:      "AIzaSyB5kQPuXNWWL1RLcfNi0CJG6v6Dea6YWHI",
+      authDomain:  "pangkalan-lpg-a6406.firebaseapp.com",
+      databaseURL: "https://pangkalan-lpg-a6406-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId:   "pangkalan-lpg-a6406",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    function log(msg, cls = '') {
+      const el = document.getElementById('log');
+      el.innerHTML += `<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // Kirim ke /live
+    async function sendLive() {
+      const data = {
+        berat:     parseFloat(document.getElementById('r-berat').value),
+        ppm:       parseFloat(document.getElementById('r-ppm').value),
+        suhu:      parseFloat(document.getElementById('r-suhu').value),
+        humidity:  parseFloat(document.getElementById('r-humid').value),
+        timestamp: Date.now(),
+        device_id: 'ESP32-LPG-01'
+      };
+
+      try {
+        await set(ref(db, '/live'), data);
+        log('Kirim ke /live: PPM=' + data.ppm + ', Berat=' + data.berat + 'kg', 'ok');
+      } catch (e) {
+        log('ERROR /live: ' + e.message, 'err');
+      }
+    }
+
+    // Kirim ke /raw (push dengan key unik)
+    async function sendRaw() {
+      const data = {
+        berat:     parseFloat(document.getElementById('r-berat').value),
+        ppm:       parseFloat(document.getElementById('r-ppm').value),
+        suhu:      parseFloat(document.getElementById('r-suhu').value),
+        humidity:  parseFloat(document.getElementById('r-humid').value),
+        timestamp: Date.now(),
+        device_id: 'ESP32-LPG-01'
+      };
+
+      try {
+        const key = '-Dummy' + Date.now();
+        await set(ref(db, '/raw/' + key), data);
+        log('Kirim ke /raw: key=' + key, 'ok');
+      } catch (e) {
+        log('ERROR /raw: ' + e.message, 'err');
+      }
+    }
+
+    // Kirim ke /history (simulasi rata-rata)
+    async function sendHistory() {
+      const ppm = parseFloat(document.getElementById('r-ppm').value);
+      let status = ppm < 500 ? 'AMAN' : ppm < 700 ? 'WASPADA' : 'BAHAYA';
+
+      const data = {
+        berat_avg:    parseFloat(document.getElementById('r-berat').value),
+        ppm_avg:      ppm,
+        ppm_max:      ppm + 20,
+        ppm_min:      ppm - 20,
+        suhu_avg:     parseFloat(document.getElementById('r-suhu').value),
+        humidity_avg: parseFloat(document.getElementById('r-humid').value),
+        status:       status,
+        sample_count: 10,
+        timestamp:    Date.now(),
+        device_id:    'ESP32-LPG-01'
+      };
+
+      try {
+        const key = '-Hist' + Date.now();
+        await set(ref(db, '/history/' + key), data);
+        log('Kirim ke /history: status=' + status, 'ok');
+      } catch (e) {
+        log('ERROR /history: ' + e.message, 'err');
+      }
+    }
+
+    // Auto-send mode
+    let autoInterval = null;
+    function toggleAuto() {
+      const btn = document.getElementById('btn-auto');
+      if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+        btn.textContent = '▶ Auto Send (5s)';
+        btn.style.background = '#22c55e';
+      } else {
+        autoInterval = setInterval(() => sendLive(), 5000);
+        btn.textContent = '■ Stop Auto Send';
+        btn.style.background = '#ef4444';
+        log('Auto-send aktif setiap 5 detik', 'ok');
+      }
+    }
+
+    // Expose ke window
+    window.sendLive    = sendLive;
+    window.sendRaw     = sendRaw;
+    window.sendHistory = sendHistory;
+    window.toggleAuto  = toggleAuto;
+
+    // Update display nilai slider
+    ['berat','ppm','suhu','humid'].forEach(name => {
+      const slider = document.getElementById('r-' + name);
+      const display = document.getElementById('v-' + name);
+      slider.addEventListener('input', () => { display.textContent = slider.value; });
+    });
+  </script>
+</head>
+<body>
+  <h2>🔧 Dummy Data Sender</h2>
+  <p style="font-size:12px;color:#8b90a0;margin-bottom:1.5rem;">
+    Simulasi data ESP32 untuk testing dashboard tanpa hardware
+  </p>
+
+  <div class="box">
+    <label>Berat LPG (kg): <span class="val" id="v-berat">3.2</span></label>
+    <input type="range" id="r-berat" min="0" max="12" step="0.1" value="3.2" />
+
+    <label style="margin-top:12px">Konsentrasi Gas (ppm): <span class="val" id="v-ppm">400</span></label>
+    <input type="range" id="r-ppm" min="0" max="1000" step="10" value="400" />
+
+    <label style="margin-top:12px">Suhu (°C): <span class="val" id="v-suhu">28.5</span></label>
+    <input type="range" id="r-suhu" min="20" max="45" step="0.1" value="28.5" />
+
+    <label style="margin-top:12px">Kelembapan (%): <span class="val" id="v-humid">65</span></label>
+    <input type="range" id="r-humid" min="30" max="100" step="1" value="65" />
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button onclick="sendLive()">Kirim → /live</button>
+    <button onclick="sendRaw()" style="background:#3b82f6;">Kirim → /raw</button>
+    <button onclick="sendHistory()" style="background:#a855f7;">Kirim → /history</button>
+    <button onclick="toggleAuto()" id="btn-auto" style="background:#22c55e;">▶ Auto Send (5s)</button>
+  </div>
+
+  <div id="log"></div>
+</body>
+</html>
