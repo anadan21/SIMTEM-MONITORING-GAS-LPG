@@ -1,5 +1,5 @@
 # Sistem IoT Analisis Kualitas LPG
-## Panduan Setup Lengkap
+## Panduan Setup — Versi 2 (Firebase Native)
 
 ---
 
@@ -7,12 +7,16 @@
 
 ```
 lpg-iot-system/
-├── dashboard.html         ← Dashboard utama (buka di browser)
-├── dummy_sender.html      ← Testing tanpa ESP32
-├── firebase_structure.json ← Contoh struktur database
-├── firebase_rules.json    ← Security rules Firebase
-├── apps_script.gs         ← Google Apps Script (copy ke GAS Editor)
-└── README.md              ← Panduan ini
+├── dashboard.html              ← Dashboard utama realtime
+├── dummy_sender.html           ← Testing tanpa ESP32
+├── apps_script.gs              ← Google Apps Script (copy ke GAS Editor)
+├── code_arduino.cpp            ← Kode ESP32 (buka di Arduino IDE)
+├── firebase-config.js          ← Config Firebase RAHASIA ← ada di .gitignore
+├── firebase-config.example.js  ← Template config (di-commit ke git)
+├── firebase_structure.json     ← Contoh struktur database
+├── firebase_rules.json         ← Security rules Firebase
+├── .gitignore                  ← Mengecualikan firebase-config.js
+└── README.md                   ← Panduan ini
 ```
 
 ---
@@ -20,170 +24,190 @@ lpg-iot-system/
 ## Alur Sistem
 
 ```
-ESP32 Sensor
+ESP32 Sensor (1 detik)
     │
-    ▼
-Firebase Realtime Database
-    ├── /live     ← Data terbaru (1 record, terus dioverwrite)
-    ├── /raw      ← Semua data mentah (push, bertambah terus)
-    └── /history  ← Rata-rata per periode (dari ESP32 atau manual)
-         │
-         ▼
-    Google Apps Script (trigger 15 menit)
-         │
-         ▼
-    Google Spreadsheet
+    ├──→ Firebase /live      ← Dashboard HTML baca ini (realtime)
+    ├──→ Firebase /raw       ← Setiap 10 detik (log mentah)
+    └──→ Firebase /history   ← Saat tabung diangkat (data stabil)
+                │
+                ▼
+         Google Apps Script
+         (trigger 15 menit)
+                │
+                ▼
+         Google Spreadsheet
+         (pewarnaan otomatis)
 ```
 
 ---
 
-## LANGKAH 1: Setup Firebase
+## Logika Status (sesuai Arduino)
 
-### 1.1 Buat Project Firebase
-1. Buka https://console.firebase.google.com
-2. Klik **Add Project** → beri nama, klik Continue
-3. Nonaktifkan Google Analytics (opsional) → Create Project
-
-### 1.2 Aktifkan Realtime Database
-1. Di sidebar kiri: **Build → Realtime Database**
-2. Klik **Create Database**
-3. Pilih lokasi (pilih **Singapore** agar latency rendah dari Indonesia)
-4. Mode: pilih **Start in test mode** (untuk development)
-5. Klik Enable
-
-### 1.3 Ambil Firebase Config
-1. Di sidebar: klik ikon **gear** → **Project settings**
-2. Scroll ke bawah → **Your apps**
-3. Klik ikon **</>** (Web app) → Register app
-4. Copy config yang muncul (apiKey, authDomain, databaseURL, dll.)
-5. Paste ke bagian `firebaseConfig` di `dashboard.html` dan `dummy_sender.html`
-
-### 1.4 Upload Firebase Security Rules
-1. Di Realtime Database: klik tab **Rules**
-2. Hapus isi yang ada
-3. Copy isi `firebase_rules.json` → Paste → Publish
+| Kondisi | Status | LED |
+|---------|--------|-----|
+| PPM > 300 | **BOCOR** | Merah + Buzzer |
+| Berat ≥ 7.80 kg | **LAYAK** | Hijau |
+| Berat ≥ 4.80 kg | **KURANG** | Kuning |
+| Berat < 4.80 kg | **KOSONG** | Mati |
 
 ---
 
-## LANGKAH 2: Jalankan Dashboard
+## LANGKAH 1: Setup Keamanan Firebase Config
 
-1. Buka `dashboard.html` di browser (double-click atau via VS Code Live Server)
-2. Jika koneksi berhasil, badge di pojok kanan atas berubah jadi **● LIVE**
-3. Untuk testing: buka `dummy_sender.html` → geser slider → klik **Kirim → /live**
-4. Dashboard akan otomatis update tanpa refresh
-
----
-
-## LANGKAH 3: Setup Google Apps Script
-
-### 3.1 Buat Spreadsheet
-1. Buka https://sheets.google.com
-2. Buat spreadsheet baru, beri nama misalnya **"Data LPG Monitor"**
-
-### 3.2 Buka Apps Script Editor
-1. Di Spreadsheet: klik **Extensions → Apps Script**
-2. Hapus kode default (`function myFunction() {}`)
-3. Copy seluruh isi `apps_script.gs` → Paste
-
-### 3.3 Konfigurasi
-Di baris paling atas script, ganti:
-```javascript
-const FIREBASE_URL = 'https://NAMA_PROJECT-default-rtdb.firebaseio.com';
+### 1a. Clone / download project
+```bash
+git clone ...
+cd lpg-iot-system
 ```
-Ganti `NAMA_PROJECT` dengan nama project Firebase Anda.
 
-### 3.4 Jalankan Setup Pertama Kali
-1. Di dropdown function, pilih `setupSpreadsheet` → klik **Run ▶**
-2. Izinkan permission yang diminta (Google akan minta konfirmasi)
-3. Header kolom akan otomatis terbuat di Sheet
+### 1b. Buat firebase-config.js dari template
+Salin `firebase-config.example.js` → `firebase-config.js`:
+```bash
+cp firebase-config.example.js firebase-config.js
+```
 
-### 3.5 Aktifkan Trigger Otomatis
-1. Pilih function `setupTrigger` → klik **Run ▶**
-2. Script akan berjalan otomatis setiap **15 menit**
-3. Cek di **Triggers** (ikon jam di sidebar kiri) untuk konfirmasi
+### 1c. Isi config di firebase-config.js
+Buka Firebase Console → Project Settings → Your apps → SDK setup and configuration.
+Copy nilai ke `firebase-config.js`:
+```js
+export const firebaseConfig = {
+  apiKey:            "ISI_API_KEY",
+  authDomain:        "project.firebaseapp.com",
+  databaseURL:       "https://project-rtdb.asia-southeast1.firebasedatabase.app",
+  ...
+};
+```
 
-### 3.6 Test Manual
-1. Pilih function `syncHistoryToSheet` → klik **Run ▶**
-2. Cek Spreadsheet — data dari Firebase /history akan muncul
-3. Baris akan berwarna: Hijau = AMAN, Kuning = WASPADA, Merah = BAHAYA
+> File ini **sudah di .gitignore** — tidak akan ter-push ke GitHub.
+
+---
+
+## LANGKAH 2: Setup Firebase
+
+### 2.1 Buat Project Firebase
+1. https://console.firebase.google.com → Add Project
+2. Build → Realtime Database → Create Database
+3. Pilih region **asia-southeast1 (Singapore)** agar cepat dari Indonesia
+4. Mode: Start in test mode
+
+### 2.2 Deploy Security Rules
+1. Realtime Database → tab **Rules**
+2. Copy isi `firebase_rules.json` → Publish
+
+---
+
+## LANGKAH 3: Jalankan Dashboard
+
+```
+Buka dashboard.html di browser (atau via VS Code Live Server)
+```
+
+Karena menggunakan ES Module (`import`), file **tidak bisa dibuka langsung** dengan `file://` di beberapa browser. Gunakan salah satu cara:
+- VS Code → Install **Live Server** extension → klik **Go Live**
+- Python: `python -m http.server 8080` lalu buka `http://localhost:8080/dashboard.html`
 
 ---
 
 ## LANGKAH 4: Testing Tanpa ESP32
 
-Gunakan `dummy_sender.html`:
+Buka `dummy_sender.html` (dengan Live Server juga):
+- Geser slider → status preview langsung berubah
+- Klik **Kirim → /live** → lihat dashboard update
+- Klik **Auto Send (5s)** → simulasi ESP32 berjalan
 
-| Button | Fungsi |
-|--------|--------|
-| Kirim → /live | Kirim data ke /live (dashboard update realtime) |
-| Kirim → /raw  | Simpan 1 record ke /raw |
-| Kirim → /history | Simpan rata-rata ke /history |
-| Auto Send (5s) | Kirim ke /live tiap 5 detik (simulasi ESP32) |
+---
 
-Untuk testing Apps Script: jalankan `sendDummyHistoryToFirebase()` dari GAS editor.
+## LANGKAH 5: Setup Google Apps Script
+
+### 5.1 Buat Spreadsheet
+Buka https://sheets.google.com → buat spreadsheet baru.
+
+### 5.2 Buka Apps Script
+Extensions → Apps Script → hapus kode default.
+
+### 5.3 Paste & Konfigurasi
+Copy isi `apps_script.gs` → paste. Ganti:
+```js
+const FIREBASE_URL = 'https://NAMA_PROJECT-rtdb.asia-southeast1.firebasedatabase.app';
+```
+
+### 5.4 Jalankan Sekali
+1. Pilih `setupSpreadsheet` → Run ▶ → izinkan permission
+2. Pilih `setupTrigger` → Run ▶
+
+### 5.5 Test Manual
+Pilih `sendDummyHistoryToFirebase` → Run → cek Spreadsheet.
+
+---
+
+## LANGKAH 6: Upload Kode ke ESP32
+
+### 6.1 Install Library (Arduino IDE)
+Buka Library Manager, install:
+- `HX711` by Bogdan Necula
+- `DHT sensor library` by Adafruit
+- `LiquidCrystal I2C` by Frank de Brabander
+- `ArduinoJson` by Benoit Blanchon ← **BARU**
+
+### 6.2 Konfigurasi di code_arduino.cpp
+Edit baris berikut sesuai setup Anda:
+```cpp
+const char* WIFI_SSID     = "NAMA_WIFI";
+const char* WIFI_PASS     = "PASSWORD_WIFI";
+const char* FIREBASE_HOST = "https://NAMA_PROJECT-rtdb.asia-southeast1.firebasedatabase.app";
+const float BERAT_TABUNG  = 5.0;    // berat tabung kosong (kg)
+const float HX711_SCALE   = 23483.0; // hasil kalibrasi HX711
+```
+
+### 6.3 Upload
+Board: ESP32 Dev Module → Upload.
 
 ---
 
 ## Tips Keamanan Firebase (Production)
 
-Setelah selesai testing, ganti rules Firebase dengan yang lebih ketat:
-
+Setelah selesai testing, ganti rules dengan:
 ```json
 {
   "rules": {
-    "live": {
-      ".read":  true,
-      ".write": "auth != null"
-    },
-    "raw": {
-      ".read":  "auth != null",
-      ".write": "auth != null"
-    },
-    "history": {
-      ".read":  true,
-      ".write": "auth != null"
-    }
+    "live":    { ".read": true,  ".write": "auth != null" },
+    "raw":     { ".read": "auth != null", ".write": "auth != null" },
+    "history": { ".read": true,  ".write": "auth != null" }
   }
 }
 ```
 
-Lalu di ESP32 dan Apps Script gunakan **Service Account** atau **Database Secret** untuk autentikasi.
+Untuk ESP32, gunakan **Database Secret** (Project Settings → Service Accounts → Database secrets) dan kirim sebagai query param `?auth=SECRET`.
 
 ---
 
 ## Struktur Database Firebase
 
 ```
-/live
-  berat      : float   — berat tabung (kg)
-  ppm        : float   — konsentrasi gas (ppm)
-  suhu       : float   — suhu (°C)
-  humidity   : float   — kelembapan (%RH)
-  timestamp  : integer — Unix timestamp ms
-  device_id  : string  — ID perangkat ESP32
+/live                       ← 1 record, terus di-overwrite tiap detik
+  berat      : float        — berat total (tabung + isi)
+  isi        : float        — berat isi LPG (berat - BERAT_TABUNG)
+  ppm        : int          — pembacaan sensor MQ
+  suhu       : float        — °C
+  humidity   : float        — %RH
+  status     : string       — LAYAK | KURANG | BOCOR | KOSONG
+  timestamp  : long         — millis() ESP32
+  device_id  : string
 
-/raw/{auto-key}
+/raw/{push-key}             ← Push tiap RAW_INTERVAL_SEC detik
   (field sama dengan /live)
 
-/history/{auto-key}
+/history/{id}               ← Push saat tabung diangkat
+  id           : string     — HIST-{timestamp}
   berat_avg    : float
-  ppm_avg      : float
-  ppm_max      : float
-  ppm_min      : float
+  isi_avg      : float
+  ppm_avg      : int
+  ppm_max      : int
+  ppm_min      : int
   suhu_avg     : float
   humidity_avg : float
-  status       : string  — "AMAN" | "WASPADA" | "BAHAYA"
-  sample_count : integer
-  timestamp    : integer
+  status       : string
+  sample_count : int
+  timestamp    : long
   device_id    : string
 ```
-
----
-
-## Status PPM
-
-| Range PPM | Status   | Warna    |
-|-----------|----------|----------|
-| 0 – 499   | AMAN     | Hijau    |
-| 500 – 699 | WASPADA  | Kuning   |
-| 700+      | BAHAYA   | Merah    |

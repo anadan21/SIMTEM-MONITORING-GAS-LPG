@@ -1,177 +1,192 @@
 /**
  * ================================================================
  * Google Apps Script: Firebase /history → Google Spreadsheet
+ * Versi 2 — ID unik, status logika Arduino, header fix
  * ================================================================
  * CARA SETUP:
- * 1. Buka Google Spreadsheet Anda
- * 2. Extensions → Apps Script
- * 3. Paste seluruh kode ini
- * 4. Ganti FIREBASE_URL di bawah
- * 5. Jalankan setupSpreadsheet() sekali untuk membuat header
- * 6. Deploy trigger otomatis dengan setupTrigger()
+ * 1. Buka Google Spreadsheet → Extensions → Apps Script
+ * 2. Paste seluruh kode ini, hapus kode lama
+ * 3. Ganti FIREBASE_URL di bawah
+ * 4. Run: setupSpreadsheet()  ← SEKALI untuk buat header
+ * 5. Run: setupTrigger()      ← SEKALI untuk aktifkan jadwal otomatis
  * ================================================================
  */
 
-// ---- KONFIGURASI — WAJIB DIGANTI ----
-const FIREBASE_URL  = 'https://NAMA_PROJECT-default-rtdb.firebaseio.com';
-const FIREBASE_AUTH = '';   // Kosongkan jika pakai Firebase Rules publik
-                             // Atau isi dengan Database Secret (Settings > Service Accounts)
+// ── KONFIGURASI — WAJIB DIGANTI ──────────────────────────────────
+const FIREBASE_URL  = 'https://pangkalan-lpg-a6406-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FIREBASE_AUTH = '';   // Kosong = rules publik. Isi jika pakai Database Secret.
 const SHEET_NAME    = 'History LPG';
+// ─────────────────────────────────────────────────────────────────
 
-// ---- HEADER KOLOM SPREADSHEET ----
+// Header kolom — urutan ini HARUS sama dengan array `row` di syncHistoryToSheet()
 const HEADERS = [
-  'No',
-  'Timestamp',
-  'Tanggal',
-  'Jam',
-  'Berat Avg (kg)',
-  'PPM Avg',
-  'PPM Max',
-  'PPM Min',
-  'Suhu Avg (°C)',
-  'Humidity Avg (%)',
-  'Status',
-  'Jumlah Sampel',
-  'Device ID'
+  'ID',             // A — ID unik dari Firebase atau generate otomatis
+  'Timestamp',      // B — Unix ms (untuk de-duplikasi)
+  'Tanggal',        // C
+  'Jam',            // D
+  'Berat Total (kg)',// E — berat tabung + isi
+  'Berat Isi (kg)', // F — berat isi LPG saja
+  'PPM Avg',        // G
+  'PPM Max',        // H
+  'PPM Min',        // I
+  'Suhu Avg (°C)',  // J
+  'Humidity Avg (%)',// K
+  'Status',         // L — LAYAK / KURANG / BOCOR / KOSONG
+  'Jumlah Sampel',  // M
+  'Device ID'       // N
 ];
+
+// ── Status logic persis seperti Arduino ──────────────────────────
+// gasGlobal > 300 → BOCOR
+// berat >= 7.80   → LAYAK
+// berat >= 4.80   → KURANG
+// else            → KOSONG
+function hitungStatus(ppm, berat) {
+  if (ppm > 300)        return 'BOCOR';
+  if (berat >= 7.80)    return 'LAYAK';
+  if (berat >= 4.80)    return 'KURANG';
+  return 'KOSONG';
+}
 
 
 /**
- * Fungsi utama: ambil data /history dari Firebase, masukkan ke Spreadsheet
- * Fungsi ini yang dipanggil oleh trigger otomatis
+ * FUNGSI UTAMA — dipanggil trigger otomatis tiap 15 menit
+ * Ambil data baru dari Firebase /history, masukkan ke Sheet
  */
 function syncHistoryToSheet() {
   const sheet = getOrCreateSheet();
 
-  // Ambil data dari Firebase
-  const url    = FIREBASE_URL + '/history.json' + (FIREBASE_AUTH ? '?auth=' + FIREBASE_AUTH : '');
-  const resp   = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-  const status = resp.getResponseCode();
+  // Fetch dari Firebase
+  const url  = FIREBASE_URL + '/history.json' + (FIREBASE_AUTH ? '?auth=' + FIREBASE_AUTH : '');
+  const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
 
-  if (status !== 200) {
-    Logger.log('ERROR: Firebase response ' + status + ' — ' + resp.getContentText());
+  if (resp.getResponseCode() !== 200) {
+    Logger.log('ERROR Firebase: HTTP ' + resp.getResponseCode() + '\n' + resp.getContentText());
     return;
   }
 
-  const raw  = JSON.parse(resp.getContentText());
-  if (!raw) {
-    Logger.log('INFO: Tidak ada data di /history');
-    return;
-  }
+  const raw = JSON.parse(resp.getContentText());
+  if (!raw) { Logger.log('INFO: /history kosong'); return; }
 
-  // Kumpulkan key yang sudah ada di sheet (kolom A: nomor urut → kita pakai timestamp sebagai ID unik)
-  const existingKeys = getExistingTimestamps(sheet);
-  Logger.log('Data sudah ada di sheet: ' + existingKeys.size + ' baris');
+  // Kumpulkan timestamp yang sudah ada (kolom B) untuk skip duplikat
+  const existing = getExistingTimestamps(sheet);
+  Logger.log('Sudah ada di sheet: ' + existing.size + ' record');
 
-  // Proses data baru
+  let newRows = 0;
   const entries = Object.entries(raw);
-  let newRows   = 0;
 
-  entries.forEach(([key, rec]) => {
-    const tsKey = String(rec.timestamp);
+  entries.forEach(([fbKey, rec]) => {
+    // De-duplikasi pakai timestamp
+    const tsKey = String(rec.timestamp ?? '');
+    if (!tsKey || existing.has(tsKey)) return;
 
-    // Skip jika sudah ada di sheet
-    if (existingKeys.has(tsKey)) return;
-
-    const dt     = new Date(rec.timestamp);
-    const no     = getNextRowNumber(sheet);
+    const dt      = new Date(rec.timestamp);
     const tanggal = Utilities.formatDate(dt, 'Asia/Makassar', 'dd/MM/yyyy');
     const jam     = Utilities.formatDate(dt, 'Asia/Makassar', 'HH:mm:ss');
 
+    // Hitung isi dari berat total (berat tabung kosong = 5 kg)
+    const beratTotal = rec.berat_avg ?? 0;
+    const beratIsi   = rec.isi_avg   ?? (beratTotal > 5 ? +(beratTotal - 5).toFixed(2) : 0);
+
+    // Status: pakai dari record jika ada, fallback hitung ulang
+    const ppmAvg = rec.ppm_avg ?? 0;
+    const status = rec.status ?? hitungStatus(ppmAvg, beratTotal);
+
+    // Buat ID: pakai field 'id' dari record, fallback ke key Firebase
+    const id = rec.id ?? fbKey;
+
     const row = [
-      no,
-      rec.timestamp,
-      tanggal,
-      jam,
-      rec.berat_avg     ?? '',
-      rec.ppm_avg       ?? '',
-      rec.ppm_max       ?? '',
-      rec.ppm_min       ?? '',
-      rec.suhu_avg      ?? '',
-      rec.humidity_avg  ?? '',
-      rec.status        ?? '',
-      rec.sample_count  ?? '',
-      rec.device_id     ?? ''
+      id,                         // A
+      rec.timestamp,              // B
+      tanggal,                    // C
+      jam,                        // D
+      beratTotal,                 // E
+      beratIsi,                   // F
+      ppmAvg,                     // G
+      rec.ppm_max      ?? '',     // H
+      rec.ppm_min      ?? '',     // I
+      rec.suhu_avg     ?? '',     // J
+      rec.humidity_avg ?? '',     // K
+      status,                     // L
+      rec.sample_count ?? '',     // M
+      rec.device_id    ?? ''      // N
     ];
 
     sheet.appendRow(row);
     newRows++;
   });
 
-  // Pewarnaan baris status (opsional, bisa dimatikan)
+  // Warna baris sesuai status (re-render semua setiap sync)
   colorStatusRows(sheet);
-
-  Logger.log('Selesai. Baris baru ditambahkan: ' + newRows);
   SpreadsheetApp.flush();
+
+  Logger.log('Selesai. Baris baru: ' + newRows + ' | Total: ' + (sheet.getLastRow() - 1));
 }
 
 
 /**
- * Setup header spreadsheet — jalankan SEKALI saja saat pertama kali
+ * Setup header — JALANKAN SEKALI PERTAMA KALI
+ * Akan skip jika header sudah ada
  */
 function setupSpreadsheet() {
   const sheet = getOrCreateSheet();
 
-  // Cek apakah header sudah ada
-  if (sheet.getLastRow() > 0) {
-    const firstCell = sheet.getRange(1, 1).getValue();
-    if (firstCell === 'No') {
-      Logger.log('Header sudah ada, skip setup.');
+  // Cek apakah header baris pertama sudah benar
+  if (sheet.getLastRow() >= 1) {
+    const val = sheet.getRange(1, 1).getValue();
+    if (val === 'ID') {
+      Logger.log('Header sudah ada, tidak perlu setup ulang.');
       return;
     }
+    // Jika ada data lain di baris 1, sisipkan baris baru di atas
+    sheet.insertRowBefore(1);
   }
 
-  // Tulis header
-  sheet.insertRowBefore(1);
+  // Tulis header di baris 1
   const headerRange = sheet.getRange(1, 1, 1, HEADERS.length);
   headerRange.setValues([HEADERS]);
 
-  // Format header
+  // Styling header
   headerRange
     .setBackground('#1a1d27')
     .setFontColor('#ffffff')
     .setFontWeight('bold')
-    .setHorizontalAlignment('center');
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
 
-  // Freeze baris header
+  sheet.setRowHeight(1, 30);
   sheet.setFrozenRows(1);
-
-  // Auto-resize kolom
   sheet.autoResizeColumns(1, HEADERS.length);
 
-  Logger.log('Header spreadsheet berhasil dibuat.');
+  Logger.log('Header berhasil dibuat di sheet: ' + SHEET_NAME);
 }
 
 
 /**
- * Buat trigger otomatis — jalankan SEKALI untuk set jadwal
- * Default: setiap 15 menit
+ * Setup trigger otomatis — JALANKAN SEKALI untuk aktifkan jadwal
  */
 function setupTrigger() {
   // Hapus trigger lama agar tidak duplikat
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(t => {
+  ScriptApp.getProjectTriggers().forEach(t => {
     if (t.getHandlerFunction() === 'syncHistoryToSheet') {
       ScriptApp.deleteTrigger(t);
     }
   });
 
-  // Buat trigger baru — setiap 15 menit
   ScriptApp.newTrigger('syncHistoryToSheet')
     .timeBased()
     .everyMinutes(15)
     .create();
 
-  Logger.log('Trigger otomatis aktif: setiap 15 menit.');
+  Logger.log('Trigger aktif: syncHistoryToSheet setiap 15 menit.');
 }
 
 
 /**
- * Hapus semua trigger (untuk reset)
+ * Hapus trigger (untuk reset / nonaktifkan)
  */
 function removeTrigger() {
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(t => {
+  ScriptApp.getProjectTriggers().forEach(t => {
     if (t.getHandlerFunction() === 'syncHistoryToSheet') {
       ScriptApp.deleteTrigger(t);
       Logger.log('Trigger dihapus.');
@@ -180,9 +195,43 @@ function removeTrigger() {
 }
 
 
-// ================================================================
-// FUNGSI HELPER (tidak perlu diubah)
-// ================================================================
+/**
+ * TEST: Kirim satu record dummy ke /history Firebase
+ * Jalankan dari Editor untuk verifikasi koneksi
+ */
+function sendDummyHistoryToFirebase() {
+  const ts  = Date.now();
+  const key = '-Test' + ts;
+  const data = {
+    id:           'HIST-' + ts,
+    berat_avg:    7.84,
+    isi_avg:      2.84,
+    ppm_avg:      120,
+    ppm_max:      145,
+    ppm_min:      98,
+    suhu_avg:     28.7,
+    humidity_avg: 65.0,
+    status:       'LAYAK',
+    sample_count: 10,
+    timestamp:    ts,
+    device_id:    'ESP32-LPG-01'
+  };
+
+  const url  = FIREBASE_URL + '/history/' + key + '.json' + (FIREBASE_AUTH ? '?auth=' + FIREBASE_AUTH : '');
+  const opts = {
+    method:             'PUT',
+    contentType:        'application/json',
+    payload:            JSON.stringify(data),
+    muteHttpExceptions: true
+  };
+
+  const resp = UrlFetchApp.fetch(url, opts);
+  Logger.log('Response: ' + resp.getResponseCode());
+  Logger.log(resp.getContentText());
+}
+
+
+// ── HELPER FUNCTIONS ─────────────────────────────────────────────
 
 function getOrCreateSheet() {
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
@@ -197,74 +246,29 @@ function getOrCreateSheet() {
 function getExistingTimestamps(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) return new Set();
-
-  // Timestamp ada di kolom B (index 2)
-  const values = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
-  return new Set(values.map(r => String(r[0])));
-}
-
-function getNextRowNumber(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return 1;
-
-  // Ambil nomor terakhir di kolom A
-  const lastNo = sheet.getRange(lastRow, 1).getValue();
-  return (Number(lastNo) || 0) + 1;
+  // Timestamp di kolom B (index 2), mulai baris 2
+  const vals = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  return new Set(vals.map(r => String(r[0])).filter(Boolean));
 }
 
 function colorStatusRows(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) return;
 
-  // Kolom K (index 11) = Status
-  const statusRange = sheet.getRange(2, 11, lastRow - 1, 1);
-  const statusValues = statusRange.getValues();
+  // Status ada di kolom L (index 12)
+  const statusVals = sheet.getRange(2, 12, lastRow - 1, 1).getValues();
 
-  statusValues.forEach((row, i) => {
-    const status = String(row[0]).toUpperCase();
+  statusVals.forEach((row, i) => {
+    const status = String(row[0]).toUpperCase().trim();
     const rowNum = i + 2;
     const range  = sheet.getRange(rowNum, 1, 1, HEADERS.length);
 
-    if (status === 'BAHAYA') {
-      range.setBackground('#fde8e8');
-    } else if (status === 'WASPADA') {
-      range.setBackground('#fef3cd');
-    } else if (status === 'AMAN') {
-      range.setBackground('#d4edda');
+    switch (status) {
+      case 'LAYAK':  range.setBackground('#d4edda'); break; // hijau muda
+      case 'KURANG': range.setBackground('#fff3cd'); break; // kuning muda
+      case 'BOCOR':  range.setBackground('#f8d7da'); break; // merah muda
+      case 'KOSONG': range.setBackground('#e2e3e5'); break; // abu-abu muda
+      default:       range.setBackground(null);      break;
     }
   });
-}
-
-
-/**
- * TEST: Kirim data dummy ke /history Firebase (untuk testing tanpa ESP32)
- * Jalankan dari Apps Script Editor
- */
-function sendDummyHistoryToFirebase() {
-  const key       = '-Test' + Date.now();
-  const timestamp = Date.now();
-  const data = {
-    berat_avg:    3.22,
-    ppm_avg:      425.5,
-    ppm_max:      480,
-    ppm_min:      380,
-    suhu_avg:     28.7,
-    humidity_avg: 65.0,
-    status:       'AMAN',
-    sample_count: 10,
-    timestamp:    timestamp,
-    device_id:    'ESP32-LPG-01'
-  };
-
-  const url  = FIREBASE_URL + '/history/' + key + '.json' + (FIREBASE_AUTH ? '?auth=' + FIREBASE_AUTH : '');
-  const opts = {
-    method:      'PUT',
-    contentType: 'application/json',
-    payload:     JSON.stringify(data),
-    muteHttpExceptions: true
-  };
-
-  const resp = UrlFetchApp.fetch(url, opts);
-  Logger.log('Dummy data sent. Response: ' + resp.getResponseCode());
-  Logger.log(resp.getContentText());
 }

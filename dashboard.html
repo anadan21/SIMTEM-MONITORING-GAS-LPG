@@ -5,65 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LPG Quality Monitor — IoT Dashboard</title>
 
-  <!-- ============================================================
-       LANGKAH 1: Ganti nilai di bawah ini dengan config Firebase Anda
-       Cara ambil config: Firebase Console → Project Settings → Your apps → SDK setup
-       ============================================================ -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    // Config diimport dari file terpisah (ada di .gitignore)
+    import { firebaseConfig } from './firebase-config.js';
+    import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyB5kQPuXNWWL1RLcfNi0CJG6v6Dea6YWHI",
-      authDomain: "pangkalan-lpg-a6406.firebaseapp.com",
-      databaseURL: "https://pangkalan-lpg-a6406-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "pangkalan-lpg-a6406",
-      storageBucket: "pangkalan-lpg-a6406.firebasestorage.app",
-      messagingSenderId: "889155673773",
-      appId: "1:889155673773:web:389869ede5e9ca0e63b024",
-    };
-
-    // Init Firebase
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // ============================================================
-    // LISTEN DATA /live secara realtime
-    // Setiap kali ESP32 kirim data baru, fungsi ini otomatis dipanggil
-    // ============================================================
+    // ── Status koneksi ──────────────────────────────────────────
+    const connRef = ref(db, '.info/connected');
+    onValue(connRef, (snap) => {
+      const badge = document.getElementById('conn-badge');
+      if (snap.val() === true) {
+        badge.textContent = '● LIVE';
+        badge.className   = 'badge badge-live';
+      } else {
+        badge.textContent = '○ OFFLINE';
+        badge.className   = 'badge badge-offline';
+      }
+    });
+
+    // ── Listen /live realtime ───────────────────────────────────
     const liveRef = ref(db, '/live');
     onValue(liveRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
 
-      // Update nilai kartu
-      document.getElementById('val-berat').textContent   = Number(data.berat   ?? 0).toFixed(2);
-      document.getElementById('val-ppm').textContent     = Number(data.ppm     ?? 0).toFixed(0);
-      document.getElementById('val-suhu').textContent    = Number(data.suhu    ?? 0).toFixed(1);
-      document.getElementById('val-humid').textContent   = Number(data.humidity ?? 0).toFixed(0);
+      // Nilai kartu
+      document.getElementById('val-berat').textContent  = Number(data.berat    ?? 0).toFixed(2);
+      document.getElementById('val-ppm').textContent    = Number(data.ppm      ?? 0).toFixed(0);
+      document.getElementById('val-suhu').textContent   = Number(data.suhu     ?? 0).toFixed(1);
+      document.getElementById('val-humid').textContent  = Number(data.humidity ?? 0).toFixed(0);
+      document.getElementById('val-isi').textContent    = Number(data.isi      ?? 0).toFixed(2);
 
-      // Update bar PPM (skala 0–1000)
+      // Bar PPM (skala 0–1000 ppm → 0–100%)
       const ppm = Number(data.ppm ?? 0);
       const pct = Math.min(100, Math.round(ppm / 10));
-      document.getElementById('ppm-bar').style.width = pct + '%';
-      document.getElementById('ppm-pct').textContent  = pct + '%';
+      document.getElementById('ppm-bar').style.width      = pct + '%';
+      document.getElementById('ppm-bar').style.background = getPPMColor(ppm);
+      document.getElementById('ppm-pct').textContent      = pct + '%';
 
-      // Warna bar berdasarkan level ppm
-      const barColor = ppm < 500 ? '#22c55e' : ppm < 700 ? '#f59e0b' : '#ef4444';
-      document.getElementById('ppm-bar').style.background = barColor;
+      // Indikator status (ikuti logika Arduino)
+      updateStatus(ppm, Number(data.berat ?? 0));
 
-      // Update indikator status
-      updateStatus(ppm);
-
-      // Update timestamp
+      // Timestamp
       if (data.timestamp) {
         const dt = new Date(data.timestamp);
         document.getElementById('ts-label').textContent =
           'Update: ' + dt.toLocaleTimeString('id-ID');
       }
 
-      // Animasi flash saat data berubah
-      ['val-berat','val-ppm','val-suhu','val-humid'].forEach(id => {
+      // Animasi flash
+      ['val-berat','val-ppm','val-suhu','val-humid','val-isi'].forEach(id => {
         const el = document.getElementById(id);
         el.classList.remove('flash');
         void el.offsetWidth;
@@ -71,44 +66,48 @@
       });
     });
 
-    // Status koneksi
-    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-      .then(({ ref: dbRef, onValue: dbOnValue }) => {
-        const connRef = dbRef(db, '.info/connected');
-        dbOnValue(connRef, (snap) => {
-          const badge = document.getElementById('conn-badge');
-          if (snap.val() === true) {
-            badge.textContent = '● LIVE';
-            badge.className   = 'badge badge-live';
-          } else {
-            badge.textContent = '○ OFFLINE';
-            badge.className   = 'badge badge-offline';
-          }
-        });
-      });
-
-    function updateStatus(ppm) {
+    // ── Logika status sesuai Arduino ───────────────────────────
+    // gasGlobal > 300 → BOCOR (prioritas tertinggi)
+    // berat ≥ 7.80    → LAYAK
+    // berat ≥ 4.80    → KURANG
+    // else            → KOSONG
+    function updateStatus(ppm, berat) {
       const row  = document.getElementById('status-row');
       const dot  = document.getElementById('status-dot');
       const text = document.getElementById('status-text');
 
-      if (ppm < 500) {
-        row.className  = 'status-row status-aman';
-        dot.className  = 'status-dot dot-aman';
-        text.textContent = 'AMAN — Kualitas LPG Normal';
-      } else if (ppm < 700) {
-        row.className  = 'status-row status-waspada';
-        dot.className  = 'status-dot dot-waspada';
-        text.textContent = 'WASPADA — Kadar Gas Meningkat';
+      let cls, dotCls, label;
+
+      if (ppm > 300) {
+        cls    = 'status-bocor';
+        dotCls = 'dot-bocor';
+        label  = '🔴 BOCOR — Gas Terdeteksi! Jauhkan dari Api!';
+      } else if (berat >= 7.80) {
+        cls    = 'status-layak';
+        dotCls = 'dot-layak';
+        label  = 'LAYAK — Tabung Penuh / Cukup';
+      } else if (berat >= 4.80) {
+        cls    = 'status-kurang';
+        dotCls = 'dot-kurang';
+        label  = 'KURANG — Sisa Gas Menipis';
       } else {
-        row.className  = 'status-row status-bahaya';
-        dot.className  = 'status-dot dot-bahaya';
-        text.textContent = 'BAHAYA — Kadar Gas Sangat Tinggi!';
+        cls    = 'status-kosong';
+        dotCls = 'dot-kosong';
+        label  = 'KOSONG — Tabung Habis / Tidak Ada';
       }
+
+      row.className  = 'status-row ' + cls;
+      dot.className  = 'status-dot ' + dotCls;
+      text.textContent = label;
     }
 
-    // Tampilkan di window agar bisa diakses dari console (untuk testing)
-    window._firebaseDB = db;
+    function getPPMColor(ppm) {
+      if (ppm <= 300) return '#22c55e';
+      if (ppm <= 600) return '#f59e0b';
+      return '#ef4444';
+    }
+
+    window._firebaseDB  = db;
     window._firebaseRef = ref;
   </script>
 
@@ -118,14 +117,16 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0f1117;
-      --surface:  #1a1d27;
-      --border:   rgba(255,255,255,0.08);
-      --text:     #e8eaf0;
-      --muted:    #8b90a0;
-      --aman:     #22c55e;
-      --waspada:  #f59e0b;
-      --bahaya:   #ef4444;
+      --bg:      #0f1117;
+      --surface: #1a1d27;
+      --border:  rgba(255,255,255,0.08);
+      --text:    #e8eaf0;
+      --muted:   #8b90a0;
+      /* status colors */
+      --layak:   #22c55e;
+      --kurang:  #f59e0b;
+      --bocor:   #ef4444;
+      --kosong:  #6b7280;
     }
 
     body {
@@ -136,12 +137,9 @@
       padding: 2rem 1rem;
     }
 
-    .container {
-      max-width: 760px;
-      margin: 0 auto;
-    }
+    .container { max-width: 800px; margin: 0 auto; }
 
-    /* ---- Header ---- */
+    /* ── Header ── */
     .header {
       display: flex;
       justify-content: space-between;
@@ -149,7 +147,7 @@
       margin-bottom: 2rem;
     }
     .site-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
-    .site-title span { color: var(--aman); }
+    .site-title span { color: var(--layak); }
 
     .badge {
       font-family: 'IBM Plex Mono', monospace;
@@ -158,15 +156,15 @@
       border-radius: 99px;
       border: 1px solid;
     }
-    .badge-live    { background: rgba(34,197,94,0.15);  color: var(--aman);    border-color: rgba(34,197,94,0.3);  }
-    .badge-offline { background: rgba(239,68,68,0.15);  color: var(--bahaya);  border-color: rgba(239,68,68,0.3);  }
+    .badge-live    { background: rgba(34,197,94,0.15);  color: var(--layak); border-color: rgba(34,197,94,0.3); }
+    .badge-offline { background: rgba(239,68,68,0.15);  color: var(--bocor); border-color: rgba(239,68,68,0.3); }
 
-    /* ---- Kartu Sensor ---- */
+    /* ── Kartu Sensor ── */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 12px;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
     .card {
@@ -189,16 +187,11 @@
       font-size: 2rem;
       font-weight: 600;
       line-height: 1;
-      color: var(--text);
     }
 
-    .card-unit {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 6px;
-    }
+    .card-unit { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
-    /* ---- Bar PPM ---- */
+    /* ── Bar PPM ── */
     .ppm-wrap {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -237,7 +230,7 @@
       margin-top: 6px;
     }
 
-    /* ---- Status ---- */
+    /* ── Status ── */
     .status-row {
       display: flex;
       align-items: center;
@@ -250,8 +243,7 @@
     }
 
     .status-dot {
-      width: 10px;
-      height: 10px;
+      width: 10px; height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
       animation: pulse 2s infinite;
@@ -259,25 +251,32 @@
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50%       { opacity: 0.4; }
+      50%       { opacity: 0.3; }
     }
 
     .status-text { font-size: 14px; font-weight: 600; }
 
-    /* Varian status */
-    .status-aman    { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.3);  }
-    .status-waspada { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); }
-    .status-bahaya  { background: rgba(239,68,68,0.1);  border-color: rgba(239,68,68,0.3);  }
+    /* Status: LAYAK */
+    .status-layak  { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.3);  }
+    .status-layak  .status-text { color: var(--layak);  }
+    .dot-layak     { background: var(--layak);  }
 
-    .status-aman    .status-text { color: var(--aman);    }
-    .status-waspada .status-text { color: var(--waspada); }
-    .status-bahaya  .status-text { color: var(--bahaya);  }
+    /* Status: KURANG */
+    .status-kurang { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); }
+    .status-kurang .status-text { color: var(--kurang); }
+    .dot-kurang    { background: var(--kurang); }
 
-    .dot-aman    { background: var(--aman);    }
-    .dot-waspada { background: var(--waspada); }
-    .dot-bahaya  { background: var(--bahaya);  }
+    /* Status: BOCOR — merah + berkedip lebih cepat */
+    .status-bocor  { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.5);  }
+    .status-bocor  .status-text { color: var(--bocor);  }
+    .dot-bocor     { background: var(--bocor); animation-duration: 0.6s; }
 
-    /* ---- Footer ---- */
+    /* Status: KOSONG */
+    .status-kosong { background: rgba(107,114,128,0.1); border-color: rgba(107,114,128,0.3); }
+    .status-kosong .status-text { color: var(--kosong); }
+    .dot-kosong    { background: var(--kosong); }
+
+    /* ── Footer ── */
     .footer {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 11px;
@@ -288,14 +287,13 @@
       padding-top: 1rem;
     }
 
-    /* ---- Animasi flash ---- */
+    /* ── Flash animation ── */
     .flash { animation: flashIn 0.4s ease; }
     @keyframes flashIn {
       0%   { opacity: 0.3; transform: scale(0.97); }
       100% { opacity: 1;   transform: scale(1); }
     }
 
-    /* ---- Responsive ---- */
     @media (max-width: 480px) {
       .grid { grid-template-columns: 1fr 1fr; }
       .card-value { font-size: 1.6rem; }
@@ -305,23 +303,27 @@
 <body>
   <div class="container">
 
-    <!-- Header -->
     <div class="header">
       <div class="site-title">LPG <span>Quality</span> Monitor</div>
       <div class="badge badge-offline" id="conn-badge">○ CONNECTING...</div>
     </div>
 
-    <!-- Kartu Sensor -->
+    <!-- Kartu Sensor — 5 kartu: tambah Berat Isi -->
     <div class="grid">
       <div class="card">
-        <div class="card-label">Berat LPG</div>
+        <div class="card-label">Berat Total</div>
         <div class="card-value" id="val-berat">—</div>
-        <div class="card-unit">kilogram</div>
+        <div class="card-unit">kg (tabung + isi)</div>
       </div>
       <div class="card">
-        <div class="card-label">Konsentrasi Gas</div>
+        <div class="card-label">Berat Isi</div>
+        <div class="card-value" id="val-isi">—</div>
+        <div class="card-unit">kg (isi LPG)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Gas (PPM)</div>
         <div class="card-value" id="val-ppm">—</div>
-        <div class="card-unit">ppm</div>
+        <div class="card-unit">ppm (MQ sensor)</div>
       </div>
       <div class="card">
         <div class="card-label">Suhu</div>
@@ -338,7 +340,7 @@
     <!-- Bar Level PPM -->
     <div class="ppm-wrap">
       <div class="ppm-header">
-        <span>Level PPM (Gas LPG)</span>
+        <span>Level Gas (PPM Sensor MQ)</span>
         <span id="ppm-pct">—</span>
       </div>
       <div class="ppm-track">
@@ -346,19 +348,18 @@
       </div>
       <div class="ppm-scale">
         <span>0</span>
-        <span>500 — Aman</span>
-        <span>700 — Waspada</span>
-        <span>1000 — Bahaya</span>
+        <span>300 — Bocor</span>
+        <span>600</span>
+        <span>1000</span>
       </div>
     </div>
 
-    <!-- Indikator Status -->
-    <div class="status-row status-aman" id="status-row">
-      <div class="status-dot dot-aman" id="status-dot"></div>
-      <div class="status-text" id="status-text">Menunggu data...</div>
+    <!-- Indikator Status (4 status sesuai Arduino) -->
+    <div class="status-row status-kosong" id="status-row">
+      <div class="status-dot dot-kosong" id="status-dot"></div>
+      <div class="status-text" id="status-text">Menunggu data dari sensor...</div>
     </div>
 
-    <!-- Footer -->
     <div class="footer">
       <span>device: ESP32-LPG-01</span>
       <span id="ts-label">— belum ada data —</span>
