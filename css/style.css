@@ -1,0 +1,577 @@
+/* ================================================================
+   style.css — Sistem QC LPG Pangkalan Gas
+   Tema: Industrial Control Panel
+   Tidak menggunakan Bootstrap / Tailwind — murni custom CSS
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Design Tokens ─────────────────────────────────────────────── */
+:root {
+  --bg:          #0a0c0f;
+  --bg-panel:    #0f1318;
+  --surface:     #141920;
+  --surface-2:   #1c2330;
+  --surface-3:   #232d3d;
+  --border:      rgba(255,255,255,0.06);
+  --border-2:    rgba(255,255,255,0.12);
+
+  --text-1:      #f0f4f8;
+  --text-2:      #8899aa;
+  --text-3:      #445566;
+
+  /* Aksen — safety yellow */
+  --accent:      #fbbf24;
+  --accent-dim:  rgba(251,191,36,0.1);
+
+  /* Status */
+  --ok:          #22c55e;
+  --warn:        #f97316;
+  --danger:      #ef4444;
+  --idle:        #475569;
+
+  --ok-dim:      rgba(34,197,94,0.08);
+  --warn-dim:    rgba(249,115,22,0.08);
+  --danger-dim:  rgba(239,68,68,0.1);
+  --idle-dim:    rgba(71,85,105,0.1);
+
+  --ok-border:      rgba(34,197,94,0.25);
+  --warn-border:    rgba(249,115,22,0.25);
+  --danger-border:  rgba(239,68,68,0.3);
+  --idle-border:    rgba(71,85,105,0.2);
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-mono:    'Share Tech Mono', monospace;
+  --font-body:    'DM Sans', sans-serif;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+}
+
+/* ── Base ──────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: 14px;
+  min-height: 100vh;
+  background-image: radial-gradient(circle, rgba(251,191,36,0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.025) 2px,
+    rgba(0,0,0,0.025) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Layout ────────────────────────────────────────────────────── */
+.app { max-width: 1200px; margin: 0 auto; padding: 0 1.25rem 2rem; }
+
+/* ── Top accent strip ──────────────────────────────────────────── */
+.top-strip { background: var(--accent); height: 3px; }
+
+/* ── Header ────────────────────────────────────────────────────── */
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.1rem 0 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+
+.brand-badge {
+  background: var(--accent);
+  color: #000;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 5px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+.header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Chips header */
+.hchip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid;
+  letter-spacing: 0.04em;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.hchip-conn           { color: var(--idle);   border-color: var(--idle-border);   background: var(--idle-dim);   }
+.hchip-conn.live      { color: var(--ok);     border-color: var(--ok-border);     background: var(--ok-dim);     }
+.hchip-conn.offline   { color: var(--danger); border-color: var(--danger-border); background: var(--danger-dim); }
+.hchip-time           { color: var(--text-3); border-color: var(--border);        background: var(--surface);    }
+
+/* ── Section Label ─────────────────────────────────────────────── */
+.sec-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sec-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── VERDICT PANEL ─────────────────────────────────────────────── */
+.verdict-panel {
+  border: 2px solid var(--idle-border);
+  border-radius: var(--r-lg);
+  background: var(--idle-dim);
+  padding: 1.4rem 1.5rem;
+  margin-bottom: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.5s, background 0.5s;
+}
+.verdict-panel::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--idle);
+  transition: background 0.5s;
+}
+
+.verdict-panel.v-layak   { border-color: var(--ok-border);     background: var(--ok-dim);     }
+.verdict-panel.v-kurang  { border-color: var(--warn-border);   background: var(--warn-dim);   }
+.verdict-panel.v-bocor   { border-color: var(--danger-border); background: var(--danger-dim); }
+.verdict-panel.v-menunggu{ border-color: var(--idle-border);   background: var(--idle-dim);   }
+
+.verdict-panel.v-layak::before   { background: var(--ok);     }
+.verdict-panel.v-kurang::before  { background: var(--warn);   }
+.verdict-panel.v-bocor::before   { background: var(--danger); }
+.verdict-panel.v-menunggu::before{ background: var(--idle);   }
+
+.verdict-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.verdict-indicator {
+  width: 68px; height: 68px;
+  border-radius: 50%;
+  border: 3px solid;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  transition: all 0.5s;
+  position: relative;
+}
+.verdict-indicator.pulsing::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 2px solid var(--danger);
+  animation: pulseRing 0.8s infinite;
+}
+@keyframes pulseRing {
+  0%   { transform: scale(1);   opacity: 0.8; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.v-layak   .verdict-indicator { border-color: var(--ok);     color: var(--ok);     background: rgba(34,197,94,0.12);  }
+.v-kurang  .verdict-indicator { border-color: var(--warn);   color: var(--warn);   background: rgba(249,115,22,0.12); }
+.v-bocor   .verdict-indicator { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.12);  }
+.v-menunggu .verdict-indicator{ border-color: var(--idle);   color: var(--idle);   background: rgba(71,85,105,0.12);  }
+
+.verdict-code {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  transition: color 0.5s;
+}
+.v-layak   .verdict-code { color: var(--ok);     }
+.v-kurang  .verdict-code { color: var(--warn);   }
+.v-bocor   .verdict-code { color: var(--danger); }
+.v-menunggu .verdict-code{ color: var(--idle);   }
+
+.verdict-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 5px;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.verdict-meta {
+  margin-left: auto;
+  text-align: right;
+  flex-shrink: 0;
+}
+.verdict-counter {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.verdict-count-val {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
+/* ── Measurement Cards ─────────────────────────────────────────── */
+.measurement-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.mcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1rem;
+  position: relative;
+  transition: border-color 0.3s;
+}
+.mcard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 12px; right: 12px;
+  height: 1px;
+  background: var(--border-2);
+}
+.mcard:hover { border-color: var(--border-2); }
+
+.mcard-icon  { font-size: 15px; margin-bottom: 8px; opacity: 0.6; }
+.mcard-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+.mcard-value {
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+  transition: opacity 0.2s;
+}
+.mcard-unit {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  margin-top: 5px;
+}
+
+/* Threshold mini bar di kartu */
+.mcard-bar { margin-top: 8px; }
+.mcard-bar-track {
+  height: 3px;
+  background: var(--surface-3);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.mcard-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.8s ease, background 0.5s;
+}
+
+/* Flash */
+.flash { animation: flashUp 0.5s ease; }
+@keyframes flashUp {
+  0%   { opacity: 0.15; transform: translateY(3px); }
+  100% { opacity: 1;    transform: translateY(0); }
+}
+
+/* ── Gas + Weight Panel ────────────────────────────────────────── */
+.gauge-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.gauge-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.1rem;
+}
+
+.gauge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.gauge-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.gauge-pct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.ppm-big {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 10px;
+  transition: color 0.4s;
+}
+
+/* Track with gradient zones */
+.gauge-track {
+  height: 10px;
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(34,197,94,0.12)  0%,  rgba(34,197,94,0.12)  30%,
+    rgba(249,115,22,0.12) 30%, rgba(249,115,22,0.12) 60%,
+    rgba(239,68,68,0.12)  60%, rgba(239,68,68,0.12)  100%
+  );
+}
+.gauge-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  border-radius: 99px;
+  transition: width 0.8s cubic-bezier(.4,0,.2,1), background 0.5s;
+}
+.gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+}
+/* Garis batas bocor */
+.gauge-limit-line {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  left: 30%;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.7;
+  border-radius: 1px;
+}
+
+/* Berat visual */
+.weight-label-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.weight-val-big {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.4s;
+}
+.weight-standard {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: right;
+  line-height: 1.6;
+}
+
+/* ── Chart Section ─────────────────────────────────────────────── */
+.chart-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.chart-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.chart-tabs {
+  display: flex;
+  gap: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 3px;
+}
+.ctab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+}
+.ctab.active {
+  background: var(--surface-2);
+  color: var(--accent);
+  border: 1px solid rgba(251,191,36,0.25);
+}
+.ctab:hover:not(.active) { color: var(--text-2); }
+
+.chart-canvas-wrap { position: relative; height: 200px; }
+
+/* ── Stats Row ─────────────────────────────────────────────────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: .9rem 1rem;
+}
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+.stat-val {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+}
+.stat-val.c-ok     { color: var(--ok);     }
+.stat-val.c-warn   { color: var(--warn);   }
+.stat-val.c-danger { color: var(--danger); }
+.stat-val.c-accent { color: var(--accent); }
+
+/* ── Footer ────────────────────────────────────────────────────── */
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-left { display: flex; gap: 18px; flex-wrap: wrap; }
+.fitem {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.fitem-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.fitem-dot.live { background: var(--ok); animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .measurement-grid { grid-template-columns: repeat(3, 1fr); }
+  .stats-row        { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .measurement-grid { grid-template-columns: repeat(2, 1fr); }
+  .gauge-row        { grid-template-columns: 1fr; }
+  .verdict-meta     { display: none; }
+}
+@media (max-width: 420px) {
+  .verdict-inner    { gap: .75rem; }
+  .verdict-code     { font-size: 1.6rem; }
+  .ppm-big, .weight-val-big { font-size: 2.2rem; }
+}

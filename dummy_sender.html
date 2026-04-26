@@ -2,186 +2,215 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <title>Dummy Data Sender — Testing Firebase</title>
+  <title>Dummy Sender — QC LPG</title>
   <style>
-    body { font-family: monospace; background: #0f1117; color: #e8eaf0; padding: 2rem; max-width: 600px; margin: 0 auto; }
-    h2   { color: #22c55e; margin-bottom: 0.5rem; }
-    p.sub { font-size: 12px; color: #8b90a0; margin-bottom: 1.5rem; }
-    .box { background: #1a1d27; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
-    .row { margin-bottom: 14px; }
-    label { display: block; font-size: 12px; color: #8b90a0; margin-bottom: 4px; }
-    input[type=range] { width: 100%; margin-bottom: 2px; }
-    .val  { font-size: 1.1rem; color: #e8eaf0; font-weight: 600; }
-    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-    button {
-      border: none; padding: 10px 18px; border-radius: 8px;
-      font-size: 13px; font-weight: 700; cursor: pointer;
-      font-family: monospace;
-    }
-    .btn-live    { background: #22c55e; color: #000; }
-    .btn-raw     { background: #3b82f6; color: #fff; }
-    .btn-history { background: #a855f7; color: #fff; }
-    .btn-auto    { background: #22c55e; color: #000; }
-    button:hover { opacity: 0.85; }
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=DM+Sans:wght@400;500&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0c0f;color:#f0f4f8;font-family:'DM Sans',sans-serif;padding:1.5rem;min-height:100vh}
+    .top-strip{background:#fbbf24;height:3px;margin:-1.5rem -1.5rem 1.5rem;}
+    h1{font-family:'Share Tech Mono',monospace;font-size:13px;color:#fbbf24;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.2rem}
+    .sub{font-size:12px;color:#445566;margin-bottom:1.25rem}
+    .card{background:#141920;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:1.1rem;margin-bottom:.75rem}
+    .card-title{font-family:'Share Tech Mono',monospace;font-size:9px;color:#445566;text-transform:uppercase;letter-spacing:.12em;margin-bottom:.9rem}
+    .row{margin-bottom:10px}
+    label{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#8899aa;margin-bottom:4px}
+    .val{font-family:'Share Tech Mono',monospace;font-weight:700;color:#f0f4f8;font-size:14px}
+    input[type=range]{width:100%;accent-color:#fbbf24}
+    .cfg-input{width:100%;background:#0a0c0f;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:7px 10px;color:#f0f4f8;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:4px}
+    .cfg-input:focus{outline:1px solid #fbbf24}
+    .preview{font-family:'Share Tech Mono',monospace;font-size:11px;padding:8px 12px;background:#0f1318;border:1px solid rgba(255,255,255,.05);border-radius:6px;margin-top:10px;color:#8899aa}
+    .preview b{color:#fbbf24}
+    .btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:.75rem}
+    button{font-family:'Share Tech Mono',monospace;font-size:11px;padding:10px 14px;border:1px solid;border-radius:8px;cursor:pointer;letter-spacing:.04em;transition:opacity .2s,transform .15s;background:transparent}
+    button:hover{opacity:.8;transform:translateY(-1px)}
+    .btn-live  {color:#22c55e;border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.07)}
+    .btn-raw   {color:#38bdf8;border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.07)}
+    .btn-hist  {color:#a78bfa;border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.07)}
+    .btn-auto  {color:#fbbf24;border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.07)}
+    .btn-auto.on{color:#ef4444;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.07)}
+    .log-box{background:#0f1318;border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:.9rem;max-height:180px;overflow-y:auto}
+    .le{font-family:'Share Tech Mono',monospace;font-size:10px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03);line-height:1.5}
+    .le:last-child{border:none}
+    .ok{color:#22c55e}.err{color:#ef4444}.info{color:#38bdf8}.warn{color:#fbbf24}
 
-    #log { font-size: 12px; color: #8b90a0; margin-top: 1rem; max-height: 180px; overflow-y: auto; }
-    .err { color: #ef4444; }
-    .ok  { color: #22c55e; }
-    .info { color: #60a5fa; }
+    /* Status chip */
+    .chip{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;font-family:'Share Tech Mono',monospace}
+    .chip-layak {background:rgba(34,197,94,.15);color:#22c55e}
+    .chip-kurang{background:rgba(249,115,22,.15);color:#f97316}
+    .chip-bocor {background:rgba(239,68,68,.15);color:#ef4444}
+    .chip-kosong{background:rgba(71,85,105,.15);color:#475569}
   </style>
 
   <script type="module">
     import { firebaseConfig } from './firebase-config.js';
-    import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { initializeApp }  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, set } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    function log(msg, cls = 'info') {
-      const el = document.getElementById('log');
-      el.innerHTML += `<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
-      el.scrollTop = el.scrollHeight;
+    function log(msg, cls='info') {
+      const el  = document.getElementById('log');
+      const div = document.createElement('div');
+      div.className = 'le ' + cls;
+      div.innerHTML = '<span style="color:#445566">[' + new Date().toLocaleTimeString('id-ID') + ']</span> ' + msg;
+      el.prepend(div);
     }
 
-    function getValues() {
+    function getVals() {
       const berat = parseFloat(document.getElementById('r-berat').value);
       const ppm   = parseFloat(document.getElementById('r-ppm').value);
       const suhu  = parseFloat(document.getElementById('r-suhu').value);
       const humid = parseFloat(document.getElementById('r-humid').value);
-      // Berat isi = berat total - 5kg (berat tabung kosong)
       const isi   = berat > 5 ? parseFloat((berat - 5).toFixed(2)) : 0;
-
-      // Logika status persis seperti Arduino
       let status;
-      if (ppm > 300)       status = 'BOCOR';
-      else if (berat >= 7.80) status = 'LAYAK';
-      else if (berat >= 4.80) status = 'KURANG';
-      else                    status = 'KOSONG';
-
+      if (ppm > 300)         status = 'BOCOR';
+      else if (berat >= 7.80)status = 'LAYAK';
+      else if (berat >= 4.80)status = 'KURANG';
+      else                   status = 'KOSONG';
       return { berat, ppm, suhu, humidity: humid, isi, status };
     }
 
-    // ── Kirim ke /live ──────────────────────────────────────────
-    async function sendLive() {
-      const data = { ...getValues(), timestamp: Date.now(), device_id: 'ESP32-LPG-01' };
-      try {
-        await set(ref(db, '/live'), data);
-        log(`/live → berat=${data.berat}kg | ppm=${data.ppm} | status=${data.status}`, 'ok');
-      } catch (e) { log('ERROR /live: ' + e.message, 'err'); }
+    function updatePreview() {
+      const v   = getVals();
+      const cls = 'chip chip-' + v.status.toLowerCase();
+      document.getElementById('preview').innerHTML =
+        `Berat: <b>${v.berat} kg</b> &nbsp;|&nbsp; Isi: <b>${v.isi} kg</b> &nbsp;|&nbsp; PPM: <b>${v.ppm}</b> &nbsp;|&nbsp; <span class="${cls}">${v.status}</span>`;
     }
 
-    // ── Kirim ke /raw ───────────────────────────────────────────
-    async function sendRaw() {
-      const data = { ...getValues(), timestamp: Date.now(), device_id: 'ESP32-LPG-01' };
+    window.sendLive = async () => {
+      const v = getVals();
       try {
-        const key = '-Dummy' + Date.now();
-        await set(ref(db, '/raw/' + key), data);
-        log(`/raw → key=${key}`, 'ok');
-      } catch (e) { log('ERROR /raw: ' + e.message, 'err'); }
-    }
+        await set(ref(db, '/live'), { ...v, timestamp: Date.now(), device_id: 'ESP32-LPG-01' });
+        log(`/live → ${v.berat}kg | ${v.ppm}ppm | <b>${v.status}</b>`, 'ok');
+      } catch(e) { log('/live ERROR: ' + e.message, 'err'); }
+    };
 
-    // ── Kirim ke /history (simulasi rata-rata) ──────────────────
-    async function sendHistory() {
-      const v = getValues();
-      const data = {
-        id:           'HIST-' + Date.now(),
-        berat_avg:    v.berat,
-        isi_avg:      v.isi,
-        ppm_avg:      v.ppm,
-        ppm_max:      parseFloat((v.ppm + 20).toFixed(0)),
-        ppm_min:      parseFloat((v.ppm - 20).toFixed(0)),
-        suhu_avg:     v.suhu,
-        humidity_avg: v.humidity,
-        status:       v.status,
-        sample_count: 10,
-        timestamp:    Date.now(),
-        device_id:    'ESP32-LPG-01'
+    window.sendRaw = async () => {
+      const v = getVals();
+      try {
+        const key = '-R' + Date.now();
+        await set(ref(db, '/raw/' + key), { ...v, timestamp: Date.now(), device_id: 'ESP32-LPG-01' });
+        log('/raw → ' + key, 'info');
+      } catch(e) { log('/raw ERROR: ' + e.message, 'err'); }
+    };
+
+    window.sendHistory = async () => {
+      const v   = getVals();
+      const ts  = Date.now();
+      const id  = 'HIST-' + ts;
+      const payload = {
+        id, berat_avg: v.berat, isi_avg: v.isi,
+        ppm_avg: v.ppm, ppm_max: v.ppm + 15, ppm_min: Math.max(0, v.ppm - 15),
+        suhu_avg: v.suhu, humidity_avg: v.humidity,
+        status: v.status, sample_count: 1,
+        timestamp: ts, device_id: 'ESP32-LPG-01'
       };
-      try {
-        const key = '-Hist' + Date.now();
-        await set(ref(db, '/history/' + key), data);
-        log(`/history → status=${data.status}`, 'ok');
-      } catch (e) { log('ERROR /history: ' + e.message, 'err'); }
-    }
 
-    // ── Auto send ───────────────────────────────────────────────
-    let autoInterval = null;
-    function toggleAuto() {
+      const gasUrl = document.getElementById('gas-url').value.trim();
+
+      // 1. Apps Script
+      if (gasUrl && !gasUrl.includes('GANTI')) {
+        try {
+          const resp = await fetch(gasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            redirect: 'follow'
+          });
+          const text = await resp.text();
+          log(`GAS → HTTP ${resp.status} | ${text}`, resp.ok ? 'ok' : 'warn');
+        } catch(e) {
+          log('GAS: ' + e.message + ' <span style="color:#445566">(CORS normal dari browser, dari ESP32 OK)</span>', 'warn');
+        }
+      } else {
+        log('GAS URL belum diisi — skip kirim ke Spreadsheet', 'warn');
+      }
+
+      // 2. Firebase /history
+      try {
+        await set(ref(db, '/history/' + id), payload);
+        log(`/history → <b>${v.status}</b> | ${id}`, 'ok');
+      } catch(e) { log('/history ERROR: ' + e.message, 'err'); }
+    };
+
+    let autoTimer = null;
+    window.toggleAuto = () => {
       const btn = document.getElementById('btn-auto');
-      if (autoInterval) {
-        clearInterval(autoInterval);
-        autoInterval = null;
-        btn.textContent  = '▶ Auto Send (5s)';
-        btn.style.background = '#22c55e';
-        btn.style.color  = '#000';
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        btn.textContent = '▶ AUTO SEND (5s)';
+        btn.className   = 'btn-auto';
         log('Auto-send dihentikan.', 'info');
       } else {
-        autoInterval = setInterval(() => sendLive(), 5000);
-        btn.textContent  = '■ Stop Auto Send';
-        btn.style.background = '#ef4444';
-        btn.style.color  = '#fff';
-        log('Auto-send aktif — kirim ke /live tiap 5 detik.', 'ok');
-        sendLive();
+        window.sendLive();
+        autoTimer = setInterval(() => window.sendLive(), 5000);
+        btn.textContent = '■ STOP AUTO';
+        btn.className   = 'btn-auto on';
+        log('Auto-send aktif — simulasi ESP32 tiap 5 detik.', 'ok');
       }
-    }
+    };
 
-    // Expose ke onclick
-    window.sendLive    = sendLive;
-    window.sendRaw     = sendRaw;
-    window.sendHistory = sendHistory;
-    window.toggleAuto  = toggleAuto;
-
-    // Live update label slider
-    ['berat','ppm','suhu','humid'].forEach(name => {
-      const slider  = document.getElementById('r-' + name);
-      const display = document.getElementById('v-' + name);
-      const update  = () => {
-        display.textContent = slider.value;
-        // Update preview status saat slider bergerak
-        const v = getValues();
-        document.getElementById('preview-status').textContent = 'Status: ' + v.status + ' | Isi: ' + v.isi + 'kg';
-      };
-      slider.addEventListener('input', update);
-      update();
+    ['berat','ppm','suhu','humid'].forEach(n => {
+      document.getElementById('r-' + n).addEventListener('input', () => {
+        document.getElementById('v-' + n).textContent = document.getElementById('r-' + n).value;
+        updatePreview();
+      });
     });
 
-    log('Firebase terhubung. Siap kirim data.', 'ok');
+    updatePreview();
+    log('Siap. Masukkan GAS URL lalu mulai kirim data.', 'info');
   </script>
 </head>
 <body>
-  <h2>Dummy Data Sender</h2>
-  <p class="sub">Simulasi data ESP32 — testing dashboard tanpa hardware</p>
+  <div class="top-strip"></div>
 
-  <div class="box">
-    <div class="row">
-      <label>Berat Total (kg) — tabung + isi: <span class="val" id="v-berat">7.5</span></label>
-      <input type="range" id="r-berat" min="0" max="12" step="0.1" value="7.5" />
-    </div>
-    <div class="row">
-      <label>Gas PPM (MQ sensor): <span class="val" id="v-ppm">100</span></label>
-      <input type="range" id="r-ppm" min="0" max="1000" step="10" value="100" />
-    </div>
-    <div class="row">
-      <label>Suhu (°C): <span class="val" id="v-suhu">28.5</span></label>
-      <input type="range" id="r-suhu" min="20" max="45" step="0.1" value="28.5" />
-    </div>
-    <div class="row">
-      <label>Kelembapan (%): <span class="val" id="v-humid">65</span></label>
-      <input type="range" id="r-humid" min="30" max="100" step="1" value="65" />
-    </div>
+  <h1>Dummy Data Sender</h1>
+  <p class="sub">Simulasi ESP32 — testing QC LPG tanpa hardware</p>
 
-    <!-- Preview status real-time -->
-    <div style="font-size:12px;color:#a78bfa;margin-top:4px;" id="preview-status">Status: —</div>
+  <!-- Config -->
+  <div class="card">
+    <div class="card-title">Konfigurasi Apps Script</div>
+    <label>URL Web App (setelah deploy)</label>
+    <input type="text" class="cfg-input" id="gas-url"
+      placeholder="https://script.google.com/macros/s/AKfycby.../exec" />
   </div>
 
+  <!-- Slider -->
+  <div class="card">
+    <div class="card-title">Nilai Sensor</div>
+    <div class="row">
+      <label>Berat Total (kg) <span class="val" id="v-berat">8.5</span></label>
+      <input type="range" id="r-berat" min="0" max="12" step="0.1" value="8.5" />
+    </div>
+    <div class="row">
+      <label>Gas PPM (sensor MQ) <span class="val" id="v-ppm">80</span></label>
+      <input type="range" id="r-ppm" min="0" max="1000" step="10" value="80" />
+    </div>
+    <div class="row">
+      <label>Suhu (°C) <span class="val" id="v-suhu">29.0</span></label>
+      <input type="range" id="r-suhu" min="20" max="45" step="0.1" value="29.0" />
+    </div>
+    <div class="row">
+      <label>Kelembapan (%) <span class="val" id="v-humid">64</span></label>
+      <input type="range" id="r-humid" min="30" max="100" step="1" value="64" />
+    </div>
+    <div class="preview" id="preview">—</div>
+  </div>
+
+  <!-- Tombol -->
   <div class="btns">
-    <button class="btn-live"    onclick="sendLive()">Kirim → /live</button>
-    <button class="btn-raw"     onclick="sendRaw()">Kirim → /raw</button>
-    <button class="btn-history" onclick="sendHistory()">Kirim → /history</button>
-    <button class="btn-auto"    onclick="toggleAuto()" id="btn-auto">▶ Auto Send (5s)</button>
+    <button class="btn-live" onclick="sendLive()">▶ /live</button>
+    <button class="btn-raw"  onclick="sendRaw()">▶ /raw</button>
+    <button class="btn-hist" onclick="sendHistory()">▶ /history + GAS</button>
+    <button class="btn-auto" onclick="toggleAuto()" id="btn-auto">▶ AUTO SEND (5s)</button>
   </div>
 
-  <div id="log"></div>
+  <!-- Log -->
+  <div class="card">
+    <div class="card-title">Log</div>
+    <div class="log-box" id="log"></div>
+  </div>
 </body>
 </html>

@@ -1,0 +1,19 @@
+# ================================================================
+# Firebase credentials — JANGAN di-commit ke GitHub
+# ================================================================
+firebase-config.js
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Node (jika ada)
+node_modules/

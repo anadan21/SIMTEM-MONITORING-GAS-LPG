@@ -1,56 +1,70 @@
 {
   "live": {
-    "berat": 3.24,
-    "ppm": 412,
-    "suhu": 28.4,
-    "humidity": 65.0,
+    "berat":     8.42,
+    "isi":       3.42,
+    "ppm":       87,
+    "suhu":      29.1,
+    "humidity":  64.0,
+    "status":    "LAYAK",
     "timestamp": 1714000000000,
     "device_id": "ESP32-LPG-01"
   },
 
   "raw": {
     "-NxABC123def": {
-      "berat": 3.24,
-      "ppm": 412,
-      "suhu": 28.4,
-      "humidity": 65.0,
+      "berat":     8.42,
+      "isi":       3.42,
+      "ppm":       87,
+      "suhu":      29.1,
+      "humidity":  64.0,
+      "status":    "LAYAK",
       "timestamp": 1714000000000,
-      "device_id": "ESP32-LPG-01"
-    },
-    "-NxABC456ghi": {
-      "berat": 3.22,
-      "ppm": 438,
-      "suhu": 28.6,
-      "humidity": 64.0,
-      "timestamp": 1714000010000,
       "device_id": "ESP32-LPG-01"
     }
   },
 
   "history": {
-    "-NxHIST001": {
-      "berat_avg": 3.23,
-      "ppm_avg": 425.0,
-      "suhu_avg": 28.5,
-      "humidity_avg": 64.5,
-      "ppm_max": 438,
-      "ppm_min": 412,
-      "status": "AMAN",
-      "sample_count": 10,
-      "timestamp": 1714000600000,
-      "device_id": "ESP32-LPG-01"
+    "HIST-1714000600000": {
+      "id":           "HIST-1714000600000",
+      "berat_avg":    8.42,
+      "isi_avg":      3.42,
+      "ppm_avg":      87,
+      "ppm_max":      102,
+      "ppm_min":      74,
+      "suhu_avg":     29.1,
+      "humidity_avg": 64.0,
+      "status":       "LAYAK",
+      "sample_count": 1,
+      "timestamp":    1714000600000,
+      "device_id":    "ESP32-LPG-01"
     },
-    "-NxHIST002": {
-      "berat_avg": 3.20,
-      "ppm_avg": 680.0,
-      "suhu_avg": 29.1,
+    "HIST-1714001200000": {
+      "id":           "HIST-1714001200000",
+      "berat_avg":    6.10,
+      "isi_avg":      1.10,
+      "ppm_avg":      142,
+      "ppm_max":      158,
+      "ppm_min":      130,
+      "suhu_avg":     29.4,
+      "humidity_avg": 65.0,
+      "status":       "KURANG",
+      "sample_count": 1,
+      "timestamp":    1714001200000,
+      "device_id":    "ESP32-LPG-01"
+    },
+    "HIST-1714001800000": {
+      "id":           "HIST-1714001800000",
+      "berat_avg":    7.92,
+      "isi_avg":      2.92,
+      "ppm_avg":      412,
+      "ppm_max":      438,
+      "ppm_min":      390,
+      "suhu_avg":     30.2,
       "humidity_avg": 66.0,
-      "ppm_max": 720,
-      "ppm_min": 640,
-      "status": "WASPADA",
-      "sample_count": 10,
-      "timestamp": 1714001200000,
-      "device_id": "ESP32-LPG-01"
+      "status":       "BOCOR",
+      "sample_count": 1,
+      "timestamp":    1714001800000,
+      "device_id":    "ESP32-LPG-01"
     }
   }
 }

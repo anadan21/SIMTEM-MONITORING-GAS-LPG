@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistem QC LPG — Pangkalan Gas</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Accent strip -->
+  <div class="top-strip"></div>
+
+  <div class="app">
+
+    <!-- ══ HEADER ══════════════════════════════════════════════ -->
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-badge">PANGKALAN LPG</div>
+        <div>
+          <div class="brand-title">Sistem QC Tabung Gas</div>
+          <div class="brand-sub">Quality Control Monitoring — IoT ESP32</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="hchip hchip-time" id="time-badge">— menunggu data —</div>
+        <div class="hchip hchip-conn" id="conn-badge">○ CONNECTING</div>
+      </div>
+    </header>
+
+    <!-- ══ VERDICT PANEL ════════════════════════════════════════ -->
+    <div class="verdict-panel v-menunggu" id="verdict-panel">
+      <div class="verdict-inner">
+
+        <div class="verdict-indicator" id="verdict-indicator">—</div>
+
+        <div>
+          <div class="verdict-code" id="verdict-code">MENUNGGU</div>
+          <div class="verdict-desc" id="verdict-desc">
+            Belum ada tabung di atas timbangan. Letakkan tabung LPG yang baru datang dari SPBE untuk memulai pemeriksaan.
+          </div>
+        </div>
+
+        <div class="verdict-meta">
+          <div class="verdict-counter">Tabung diperiksa hari ini</div>
+          <div class="verdict-count-val" id="session-count">0</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ SENSOR CARDS ══════════════════════════════════════════ -->
+    <div class="sec-label">Pembacaan Sensor</div>
+    <div class="measurement-grid">
+
+      <div class="mcard">
+        <div class="mcard-icon">⚖️</div>
+        <div class="mcard-label">Berat Total</div>
+        <div class="mcard-value" id="val-berat">—</div>
+        <div class="mcard-unit">kg (tabung + isi)</div>
+        <div class="mcard-bar">
+          <div class="mcard-bar-track">
+            <div class="mcard-bar-fill" id="berat-fill" style="width:0%;background:var(--idle);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mcard">
+        <div class="mcard-icon">🛢️</div>
+        <div class="mcard-label">Berat Isi LPG</div>
+        <div class="mcard-value" id="val-isi">—</div>
+        <div class="mcard-unit">kg (tanpa tabung)</div>
+        <div class="mcard-bar">
+          <div class="mcard-bar-track">
+            <div class="mcard-bar-fill" id="isi-fill" style="width:0%;background:var(--idle);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mcard">
+        <div class="mcard-icon">💨</div>
+        <div class="mcard-label">Gas (PPM)</div>
+        <div class="mcard-value" id="val-ppm">—</div>
+        <div class="mcard-unit">sensor MQ — batas &gt;300</div>
+      </div>
+
+      <div class="mcard">
+        <div class="mcard-icon">🌡️</div>
+        <div class="mcard-label">Suhu Sekitar</div>
+        <div class="mcard-value" id="val-suhu">—</div>
+        <div class="mcard-unit">°C (DHT22)</div>
+      </div>
+
+      <div class="mcard">
+        <div class="mcard-icon">💧</div>
+        <div class="mcard-label">Kelembapan</div>
+        <div class="mcard-value" id="val-humid">—</div>
+        <div class="mcard-unit">%RH (DHT22)</div>
+      </div>
+
+    </div>
+
+    <!-- ══ GAS + BERAT GAUGE ════════════════════════════════════ -->
+    <div class="sec-label">Indikator Utama</div>
+    <div class="gauge-row">
+
+      <!-- Gas Gauge -->
+      <div class="gauge-panel">
+        <div class="gauge-header">
+          <span class="gauge-title">💨 Konsentrasi Gas (PPM)</span>
+          <span class="gauge-pct" id="gas-pct">—</span>
+        </div>
+        <div class="ppm-big" id="ppm-big" style="color:var(--idle);">—</div>
+        <div class="gauge-track">
+          <div class="gauge-fill" id="gas-fill" style="width:0%;"></div>
+          <div class="gauge-limit-line" title="Batas bocor: 300 ppm"></div>
+        </div>
+        <div class="gauge-scale">
+          <span>0</span>
+          <span style="color:var(--accent);">300 — batas bocor</span>
+          <span>600</span>
+          <span>1000</span>
+        </div>
+      </div>
+
+      <!-- Berat Gauge -->
+      <div class="gauge-panel">
+        <div class="gauge-header">
+          <span class="gauge-title">⚖️ Berat Tabung</span>
+          <span class="gauge-pct" id="weight-pct">—</span>
+        </div>
+        <div class="weight-label-row">
+          <div class="weight-val-big" id="weight-val" style="color:var(--idle);">— kg</div>
+          <div class="weight-standard">
+            <div>≥ 7.80 kg → LAYAK</div>
+            <div>4.80–7.79 kg → KURANG</div>
+            <div>&lt; 4.80 kg → KOSONG</div>
+          </div>
+        </div>
+        <div class="gauge-track" id="gauge-track-berat">
+          <div class="gauge-fill" style="width:0%;"></div>
+        </div>
+        <div class="gauge-scale">
+          <span>0</span>
+          <span>4.80</span>
+          <span>7.80</span>
+          <span>12 kg</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ STATS SESI ════════════════════════════════════════════ -->
+    <div class="sec-label">Rekap Pemeriksaan</div>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Diperiksa</div>
+        <div class="stat-val c-accent" id="stat-total">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Layak Jual</div>
+        <div class="stat-val c-ok" id="stat-layak">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Isi Kurang</div>
+        <div class="stat-val c-warn" id="stat-kurang">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Gas Bocor</div>
+        <div class="stat-val c-danger" id="stat-bocor">0</div>
+      </div>
+    </div>
+
+    <!-- ══ GRAFIK REALTIME ════════════════════════════════════════ -->
+    <div class="sec-label">Grafik Realtime</div>
+    <div class="chart-section">
+      <div class="chart-header">
+        <div class="chart-title">Riwayat Pembacaan Sensor (30 data terakhir)</div>
+        <div class="chart-tabs">
+          <button class="ctab active" data-tab="ppm"   onclick="switchChartTab('ppm')">PPM Gas</button>
+          <button class="ctab"        data-tab="berat" onclick="switchChartTab('berat')">Berat</button>
+          <button class="ctab"        data-tab="suhu"  onclick="switchChartTab('suhu')">Suhu</button>
+          <button class="ctab"        data-tab="humid" onclick="switchChartTab('humid')">Humid</button>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="realtime-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- ══ FOOTER ════════════════════════════════════════════════ -->
+    <footer class="site-footer">
+      <div class="footer-left">
+        <div class="fitem">
+          <div class="fitem-dot live"></div>
+          Device: <span id="footer-device">ESP32-LPG-01</span>
+        </div>
+        <div class="fitem">
+          <div class="fitem-dot"></div>
+          Firebase Realtime Database
+        </div>
+        <div class="fitem">
+          <div class="fitem-dot"></div>
+          Sistem QC LPG v3.0
+        </div>
+      </div>
+      <div class="fitem">Pangkalan Gas — IoT Quality Control</div>
+    </footer>
+
+  </div><!-- /.app -->
+
+  <!-- JS Modules -->
+  <script type="module" src="js/dashboard.js"></script>
+  <script type="module" src="js/chart.js"></script>
+
+</body>
+</html>

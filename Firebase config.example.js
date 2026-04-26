@@ -1,7 +1,7 @@
 // ================================================================
 // FIREBASE CONFIG TEMPLATE
-// Salin file ini menjadi firebase-config.js lalu isi dengan nilai asli Anda
-// Cara ambil config: Firebase Console → Project Settings → Your apps → SDK setup
+// Salin file ini menjadi firebase-config.js lalu isi nilai asli Anda
+// Cara ambil: Firebase Console → Project Settings → Your apps → SDK setup
 // ================================================================
 
 export const firebaseConfig = {
