@@ -1,7 +1,6 @@
 # ================================================================
 # Firebase credentials — JANGAN di-commit ke GitHub
 # ================================================================
-firebase-config.js
 
 # Environment
 .env
