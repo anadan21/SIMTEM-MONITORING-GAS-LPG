@@ -1,23 +1,35 @@
 /**
  * ================================================================
  * ESP32 — Sistem QC LPG Pangkalan Gas
- * Versi Final — Firebase + Apps Script Web App
+ * Tabung Melon 3 kg | Sensor MQ-6 + HX711 + DHT22
  * ================================================================
  *
- * KONTEKS:
- *   Tabung LPG datang dari SPBE → diletakkan di timbangan
- *   → ESP32 baca berat + gas PPM secara realtime
- *   → Saat tabung diangkat (pemeriksaan selesai):
- *       1. Kirim ke Firebase /history (backup)
- *       2. Kirim ke Apps Script → langsung masuk Spreadsheet
+ * SPESIFIKASI TABUNG LPG 3 KG (Regulasi Pertamina / SNI):
+ *   Berat tabung kosong (tare)     : ±5.0  kg
+ *   Berat isi LPG (netto)          :  3.0  kg
+ *   Berat total ideal (bruto)      :  8.0  kg
+ *   Toleransi pengurangan maks     :  90   gram
+ *   Berat minimum LAYAK JUAL       :  7.91 kg
  *
- * ALUR DATA:
- *   /live    → Firebase, tiap 1 detik  (dashboard web realtime)
- *   /raw     → Firebase, tiap 10 detik (log mentah opsional)
- *   /history → Firebase, saat diangkat (backup)
- *   GAS URL  → Apps Script doPost, saat diangkat (Spreadsheet instan)
+ * SENSOR GAS MQ-6:
+ *   Target gas    : LPG (Propane, Butane)
+ *   Library       : MQUnifiedsensor
+ *   Output        : ppm LPG (bukan raw ADC)
+ *   Ambang bocor  : >= 1000 ppm
+ *   Referensi     : OSHA & standar industri LPG
+ *                   LEL LPG = 18.000 ppm
+ *                   Alarm awal praktis di lapangan = 1000 ppm
  *
- * LIBRARY (Arduino IDE Library Manager):
+ * CATATAN KALIBRASI:
+ *   1. Jalankan sketch kalibrasi_mq6.ino TERLEBIH DAHULU
+ *      di udara bersih luar ruangan selama 24 jam
+ *   2. Catat nilai R0 yang didapat dari Serial Monitor
+ *   3. Isi nilai R0 di bawah (konstanta MQ6_R0)
+ *   4. Untuk HX711: kalibrasi ulang dengan beban 8 kg
+ *      untuk validasi akurasi di range berat tabung penuh
+ *
+ * LIBRARY YANG DIBUTUHKAN (Arduino IDE → Library Manager):
+ *   - MQUnifiedsensor by Miguel A Califa U  ← WAJIB untuk MQ-6
  *   - HX711 by Bogdan Necula
  *   - DHT sensor library by Adafruit
  *   - LiquidCrystal I2C by Frank de Brabander
@@ -29,15 +41,18 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <LiquidCrystal_I2C.h>
+#include <MQUnifiedsensor.h>
 #include "HX711.h"
 #include "DHT.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
-// ── PIN ───────────────────────────────────────────────────────────
+// ================================================================
+//  PIN MAPPING
+// ================================================================
 #define HX_DT       4
 #define HX_SCK      5
-#define PIN_GAS_A0  34
+#define PIN_GAS_A0  34    // Pin ADC untuk MQ-6 (input analog)
 #define LED_RED     25
 #define LED_YELLOW  26
 #define LED_GREEN   33
@@ -45,101 +60,198 @@
 #define DHTPIN      14
 #define DHTTYPE     DHT22
 
-// ── KONFIGURASI JARINGAN & CLOUD ──────────────────────────────────
+// ================================================================
+//  KONFIGURASI MQ-6
+// ================================================================
+#define MQ6_BOARD       "ESP32"
+#define MQ6_PIN         "A0"      // label pin (untuk library)
+#define MQ6_TYPE        "MQ-6"
+#define MQ6_VOLT_RES    5.0       // tegangan supply sensor (5V)
+#define MQ6_ADC_BIT     12        // resolusi ADC ESP32 = 12 bit (0-4095)
+#define MQ6_RATIO_CLEAN 10.0      // Rs/R0 di udara bersih (dari datasheet MQ-6)
+
+// ── NILAI R0 — WAJIB DIISI setelah menjalankan sketch kalibrasi ──
+// Petunjuk: jalankan kalibrasi_mq6.ino, baca nilai dari Serial Monitor
+// Contoh nilai: jika Serial menampilkan "R0 = 4.56", isi 4.56
+#define MQ6_R0  4.0   // <-- GANTI dengan nilai R0 hasil kalibrasi Anda
+
+// ================================================================
+//  KONFIGURASI CLOUD
+// ================================================================
 const char* WIFI_SSID     = "bots";
 const char* WIFI_PASS     = "12345678";
 
-const char* FIREBASE_HOST = "https://pangkalan-lpg-a6406-default-rtdb.asia-southeast1.firebasedatabase.app";
+const char* FIREBASE_HOST =
+  "https://pangkalan-lpg-a6406-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 // Isi setelah Apps Script di-deploy
 // Format: https://script.google.com/macros/s/AKfycby.../exec
-const char* GAS_ENDPOINT  = "GANTI_DENGAN_URL_DEPLOY_APPS_SCRIPT";
+const char* GAS_ENDPOINT  =
+  "GANTI_DENGAN_URL_APPS_SCRIPT_ANDA";
 
-// ── KALIBRASI SENSOR ─────────────────────────────────────────────
-const float BERAT_TABUNG  = 5.0;     // kg — berat tabung kosong 3kg atau 12kg
-const float HX711_SCALE   = 23483.0; // hasil kalibrasi load cell
+// ================================================================
+//  KALIBRASI HARDWARE
+// ================================================================
+const float HX711_SCALE       = 23483.0;  // Ganti setelah kalibrasi ulang 8 kg
+const float BERAT_TABUNG_KOSONG = 5.0;    // kg — berat tabung melon kosong
 
-// ── THRESHOLD STATUS ─────────────────────────────────────────────
-const int   PPM_BOCOR     = 300;   // PPM > nilai ini → BOCOR
-const float BERAT_LAYAK   = 7.80;  // kg — layak jual (tabung 3kg isi penuh = 8kg)
-const float BERAT_KURANG  = 4.80;  // kg — isi di bawah standar
+// ================================================================
+//  THRESHOLD STATUS — HARUS SAMA dengan dashboard.js & apps_script.gs
+// ================================================================
+const float PPM_BOCOR    = 1000.0; // ppm — ambang batas bocor MQ-6
+const float BERAT_LAYAK  = 7.91;   // kg  — batas minimum layak jual Pertamina
+const float BERAT_KURANG = 5.1;    // kg  — batas bawah ada isi LPG
 
-// ── INTERVAL ─────────────────────────────────────────────────────
-const unsigned long LIVE_INTERVAL = 1000;  // ms — update /live
-const unsigned long RAW_INTERVAL  = 10000; // ms — simpan /raw (0 = nonaktif)
+// ================================================================
+//  INTERVAL & PARAMETER
+// ================================================================
+const unsigned long LIVE_INTERVAL  = 1000;   // ms — update /live
+const unsigned long RAW_INTERVAL   = 10000;  // ms — simpan /raw (0=nonaktif)
+const float         STABIL_DELTA   = 0.05;   // kg — toleransi gerak
+const unsigned long STABIL_DURASI  = 3000;   // ms — durasi stabil
 
-// ── OBJEK HARDWARE ───────────────────────────────────────────────
+// ================================================================
+//  OBJEK HARDWARE
+// ================================================================
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 HX711 scale;
 DHT   dht(DHTPIN, DHTTYPE);
 
-// ── STATE VARIABEL ────────────────────────────────────────────────
-float  b_stabil = 0, b_sebelum = 0;
-float  g_stabil = 0, t_stabil  = 0, h_stabil = 0;
-float  suhuNow  = 0, humidNow  = 0;
-int    gasNow   = 0;
+// Inisialisasi MQ-6 dengan library MQUnifiedsensor
+MQUnifiedsensor MQ6(MQ6_BOARD, MQ6_VOLT_RES, MQ6_ADC_BIT, PIN_GAS_A0, MQ6_TYPE);
 
-unsigned long waktuMulaiDiam = 0;
-unsigned long lastRawSend    = 0;
-unsigned long lastLiveSend   = 0;
+// ================================================================
+//  VARIABEL STATE
+// ================================================================
+float  suhuNow = 0, humidNow = 0;
+float  ppmNow  = 0;
 
-bool adaTabung      = false;
-bool sistemReady    = false;
-bool sudahBipStabil = false;
+float  b_stabil = 0, ppm_stabil = 0;
+float  t_stabil = 0, h_stabil   = 0;
 String statusTerakhir = "";
 
+float         b_sebelum      = 0;
+unsigned long waktuMulaiDiam = 0;
+bool          sudahBipStabil = false;
+bool          adaTabung      = false;
+bool          sistemReady    = false;
+
+unsigned long lastLiveSend = 0;
+unsigned long lastRawSend  = 0;
+
+// ================================================================
+//  FORWARD DECLARATIONS
+// ================================================================
+String hitungStatus(float ppm, float berat);
+void   updateLEDAndBuzzer(String status);
+void   updateLCD(float b_total, float b_isi, float ppm, String status);
+void   kirimLive(float berat, float isi, float ppm, float suhu, float humid, String status);
+void   kirimRaw(float berat, float isi, float ppm, float suhu, float humid, String status);
+void   kirimHistory(float berat, float isi, float ppm, String status, float suhu, float humid);
+void   kirimKeAppsScript(float berat, float isi, float ppm, String status, float suhu, float humid);
+bool   firebasePut(String path, String body);
+bool   firebasePost(String path, String body);
+String buildLiveJson(float berat, float isi, float ppm, float suhu, float humid, String status);
+String buildHistoryJson(String id, float berat, float isi, float ppm, String status, float suhu, float humid, unsigned long ts);
+void   lcdCenter(String text, int row);
 
 // ================================================================
 //  SETUP
 // ================================================================
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  Serial.begin(115200);
 
+  Serial.begin(115200);
+  delay(500);
+  Serial.println("\n=========================================");
+  Serial.println("  Sistem QC LPG — Pangkalan Gas");
+  Serial.println("  Tabung LPG 3 kg | Sensor MQ-6");
+  Serial.println("=========================================");
+
+  // Init hardware
   lcd.init(); lcd.backlight();
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(LED_RED,    OUTPUT);
   pinMode(LED_YELLOW, OUTPUT);
   pinMode(LED_GREEN,  OUTPUT);
+  digitalWrite(LED_RED,    LOW);
+  digitalWrite(LED_YELLOW, LOW);
+  digitalWrite(LED_GREEN,  LOW);
 
+  // Init HX711
   scale.begin(HX_DT, HX_SCK);
   scale.set_scale(HX711_SCALE);
   scale.tare();
-  dht.begin();
+  Serial.println("[HX711]  Timbangan di-tare (zeroed)");
 
-  // Warm-up sensor MQ (3 menit — sensor gas butuh pemanasan)
+  // Init DHT22
+  dht.begin();
+  Serial.println("[DHT22]  Init OK");
+
+  // ── Init MQ-6 dengan MQUnifiedsensor ──────────────────────────
+  MQ6.setRegressionMethod(1);     // Gunakan metode regresi eksponensial
+  MQ6.setA(1000.5);               // Koefisien A dari datasheet/kurva LPG MQ-6
+  MQ6.setB(-2.186);               // Koefisien B dari datasheet/kurva LPG MQ-6
+  //
+  // Catatan kurva LPG MQ-6 (dari datasheet):
+  //   Gas LPG: A = 1000.5, B = -2.186
+  //   (didapat dari fitting kurva karakteristik Rs/Ro vs ppm)
+  //
+  MQ6.init();
+  MQ6.setR0(MQ6_R0);             // Set nilai R0 hasil kalibrasi
+  Serial.printf("[MQ-6]   Init OK | R0 = %.2f\n", MQ6_R0);
+
+  if (MQ6_R0 == 4.0) {
+    Serial.println("[MQ-6]   PERINGATAN: Masih menggunakan R0 default!");
+    Serial.println("         Jalankan kalibrasi_mq6.ino untuk nilai akurat.");
+  }
+
+  // ── Warm-up MQ-6 (3 menit wajib) ──────────────────────────────
+  Serial.println("[MQ-6]   Warm-up 3 menit dimulai...");
   for (int i = 180; i > 0; i--) {
     lcd.clear();
-    lcdCenter("WARM-UP SENSOR", 0);
+    lcdCenter("WARM-UP MQ-6", 0);
     lcdCenter("Tunggu: " + String(i) + "s", 1);
+    if (i % 30 == 0) Serial.printf("[MQ-6]   Warm-up: %d detik lagi\n", i);
     delay(1000);
   }
+  Serial.println("[MQ-6]   Warm-up selesai");
 
-  // Koneksi WiFi
+  // ── Koneksi WiFi ──────────────────────────────────────────────
   lcd.clear();
   lcdCenter("KONEKSI WIFI...", 0);
+  Serial.printf("[WiFi]   Menghubungkan ke: %s\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-
   int timeout = 0;
   while (WiFi.status() != WL_CONNECTED && timeout < 30) {
-    delay(500); timeout++;
-    Serial.print(".");
+    delay(500); Serial.print("."); timeout++;
   }
-
+  Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
     lcdCenter("WIFI OK!", 1);
-    Serial.println("\nWiFi: " + WiFi.localIP().toString());
+    Serial.printf("[WiFi]   OK — IP: %s\n", WiFi.localIP().toString().c_str());
   } else {
     lcdCenter("WIFI GAGAL", 1);
-    Serial.println("\nWiFi gagal — mode offline");
+    Serial.println("[WiFi]   GAGAL — mode offline");
   }
+  delay(1500);
 
-  delay(2000);
+  // Print konfigurasi aktif
+  Serial.println("\n[CONFIG] Threshold aktif (Regulasi Pertamina LPG 3 kg):");
+  Serial.printf("  Tabung kosong     : %.1f kg\n",  BERAT_TABUNG_KOSONG);
+  Serial.printf("  Berat total ideal : 8.00 kg\n");
+  Serial.printf("  LAYAK JUAL        : >= %.2f kg\n", BERAT_LAYAK);
+  Serial.printf("  KURANG ISI        : %.1f – %.2f kg\n", BERAT_KURANG, BERAT_LAYAK - 0.01f);
+  Serial.printf("  KOSONG            : <= %.1f kg\n",  BERAT_KURANG);
+  Serial.printf("  BOCOR (MQ-6)      : >= %.0f ppm\n", PPM_BOCOR);
+  Serial.printf("  GAS endpoint      : %s\n",
+    String(GAS_ENDPOINT).indexOf("GANTI") >= 0 ? "BELUM DIISI!" : "OK");
+
   sistemReady = true;
   lcd.clear();
-  Serial.println("Sistem siap. Letakkan tabung untuk mulai pemeriksaan.");
+  Serial.println("\n[SISTEM] Siap — letakkan tabung untuk pemeriksaan");
+  Serial.println("=========================================\n");
 }
-
 
 // ================================================================
 //  LOOP UTAMA
@@ -148,64 +260,66 @@ void loop() {
   if (!sistemReady) return;
   unsigned long now = millis();
 
-  // 1. Baca sensor
+  // 1. Baca berat
   float b_total = scale.get_units(5);
-  if (b_total < 0.15) b_total = 0;
-  float b_isi = (b_total > BERAT_TABUNG) ? b_total - BERAT_TABUNG : 0;
+  if (b_total < 0.10) b_total = 0;
+  float b_isi = (b_total > BERAT_TABUNG_KOSONG)
+                ? b_total - BERAT_TABUNG_KOSONG : 0.0;
 
-  gasNow = analogRead(PIN_GAS_A0);
+  // 2. Baca sensor MQ-6 (output dalam ppm)
+  MQ6.update();           // Update nilai ADC dari sensor
+  ppmNow = MQ6.readSensor(); // Hitung ppm berdasarkan kurva karakteristik
+  if (ppmNow < 0) ppmNow = 0; // Sanitasi nilai negatif
 
+  // 3. Baca DHT22
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  if (!isnan(t)) { suhuNow = t; humidNow = h; }
+  if (!isnan(t) && !isnan(h)) { suhuNow = t; humidNow = h; }
 
-  // 2. Hitung status
-  String status = hitungStatus(gasNow, b_total);
+  // 4. Hitung status
+  String status = hitungStatus(ppmNow, b_total);
 
-  // 3. LED & Buzzer
+  // 5. LED & Buzzer
   updateLEDAndBuzzer(status);
 
-  // 4. Update LCD (anti-kedip — overwrite karakter)
-  lcd.setCursor(0, 0);
-  lcd.print("T:"); lcd.print(b_total, 1);
-  lcd.print(" I:"); lcd.print(b_isi, 1); lcd.print("kg  ");
-  lcd.setCursor(0, 1);
-  lcd.print(gasNow); lcd.print("ppm ");
-  lcd.print(suhuNow, 1); lcd.print("C ");
-  lcd.print(status.substring(0, 5)); lcd.print("  ");
+  // 6. LCD
+  updateLCD(b_total, b_isi, ppmNow, status);
 
-  // 5. Kirim /live setiap 1 detik
+  // 7. Kirim /live tiap 1 detik
   if (now - lastLiveSend >= LIVE_INTERVAL) {
     lastLiveSend = now;
-    kirimLive(b_total, b_isi, gasNow, suhuNow, humidNow, status);
+    kirimLive(b_total, b_isi, ppmNow, suhuNow, humidNow, status);
+    Serial.printf("[LIVE]  berat=%.2f isi=%.2f ppm=%.0f %s\n",
+                  b_total, b_isi, ppmNow, status.c_str());
   }
 
-  // 6. Kirim /raw (jika aktif)
+  // 8. Simpan /raw
   if (RAW_INTERVAL > 0 && (now - lastRawSend >= RAW_INTERVAL)) {
     lastRawSend = now;
-    kirimRaw(b_total, b_isi, gasNow, suhuNow, humidNow, status);
+    kirimRaw(b_total, b_isi, ppmNow, suhuNow, humidNow, status);
   }
 
-  // 7. Deteksi stabilisasi berat
+  // 9. Deteksi stabilisasi berat
   if (b_total >= BERAT_KURANG) {
     adaTabung = true;
-    if (abs(b_total - b_sebelum) < 0.05) {
-      // Berat tidak berubah signifikan
-      if (now - waktuMulaiDiam > 3000) {
-        // Stabil > 3 detik → lock nilai
-        b_stabil = b_total; g_stabil = gasNow;
-        t_stabil = suhuNow; h_stabil = humidNow;
+    if (abs(b_total - b_sebelum) < STABIL_DELTA) {
+      if (now - waktuMulaiDiam >= STABIL_DURASI) {
+        b_stabil   = b_total;
+        ppm_stabil = ppmNow;
+        t_stabil   = suhuNow;
+        h_stabil   = humidNow;
         statusTerakhir = status;
-
         if (!sudahBipStabil) {
           tone(BUZZER_PIN, 2000, 200);
           sudahBipStabil = true;
-          Serial.printf("Stabil: %.2f kg | isi: %.2f kg | status: %s\n",
-                        b_stabil, b_stabil - BERAT_TABUNG, statusTerakhir.c_str());
+          float isi_s = b_stabil > BERAT_TABUNG_KOSONG
+                        ? b_stabil - BERAT_TABUNG_KOSONG : 0;
+          Serial.println("\n[STABIL] Nilai terkunci:");
+          Serial.printf("         Total=%.2fkg | Isi=%.2fkg | PPM=%.0f | %s\n",
+                        b_stabil, isi_s, ppm_stabil, statusTerakhir.c_str());
         }
       }
     } else {
-      // Berat bergerak → reset stabilisasi
       waktuMulaiDiam = now;
       b_sebelum      = b_total;
       sudahBipStabil = false;
@@ -214,40 +328,44 @@ void loop() {
     sudahBipStabil = false;
   }
 
-  // 8. Tabung diangkat → kirim hasil pemeriksaan
-  if (adaTabung && b_total < 1.00) {
+  // 10. Tabung diangkat → kirim hasil
+  if (adaTabung && b_total < 1.0) {
     if (b_stabil >= BERAT_KURANG) {
-      float isi_stabil = b_stabil > BERAT_TABUNG ? b_stabil - BERAT_TABUNG : 0;
+      float isi_stabil = b_stabil > BERAT_TABUNG_KOSONG
+                         ? b_stabil - BERAT_TABUNG_KOSONG : 0;
+      Serial.println("\n[KIRIM]  Tabung diangkat — kirim hasil pemeriksaan...");
 
-      // Kirim ke Apps Script → Spreadsheet (instan)
-      kirimKeAppsScript(b_stabil, isi_stabil, g_stabil, statusTerakhir, t_stabil, h_stabil);
+      kirimKeAppsScript(b_stabil, isi_stabil, ppm_stabil,
+                        statusTerakhir, t_stabil, h_stabil);
+      kirimHistory(b_stabil, isi_stabil, ppm_stabil,
+                   statusTerakhir, t_stabil, h_stabil);
 
-      // Kirim ke Firebase /history (backup)
-      kirimHistory(b_stabil, isi_stabil, g_stabil, statusTerakhir, t_stabil, h_stabil);
-
-      // Bip dua kali = konfirmasi terkirim
       tone(BUZZER_PIN, 2500, 100); delay(150);
       tone(BUZZER_PIN, 2500, 100);
-      Serial.println("Hasil pemeriksaan terkirim.");
+      Serial.println("[KIRIM]  Selesai — siap tabung berikutnya\n");
+    } else {
+      Serial.println("[INFO]   Tabung diangkat, data stabil belum ada — skip");
     }
-    adaTabung = false;
-    b_stabil  = 0;
+    adaTabung      = false;
+    b_stabil       = 0;
+    b_sebelum      = 0;
+    ppm_stabil     = 0;
+    statusTerakhir = "";
+    waktuMulaiDiam = millis();
   }
 
   delay(1000);
 }
 
-
 // ================================================================
-//  LOGIKA STATUS (sama dengan versi sebelumnya)
+//  LOGIKA STATUS
 // ================================================================
-String hitungStatus(int gas, float berat) {
-  if (gas > PPM_BOCOR)       return "BOCOR";
+String hitungStatus(float ppm, float berat) {
+  if (berat <= BERAT_KURANG) return "KOSONG";
+  if (ppm >= PPM_BOCOR)      return "BOCOR";
   if (berat >= BERAT_LAYAK)  return "LAYAK";
-  if (berat >= BERAT_KURANG) return "KURANG";
-  return "KOSONG";
+  return "KURANG";
 }
-
 
 // ================================================================
 //  LED & BUZZER
@@ -274,6 +392,19 @@ void updateLEDAndBuzzer(String status) {
   }
 }
 
+// ================================================================
+//  LCD
+// ================================================================
+void updateLCD(float b_total, float b_isi, float ppm, String status) {
+  lcd.setCursor(0, 0);
+  lcd.print("T:"); lcd.print(b_total, 1);
+  lcd.print(" I:"); lcd.print(b_isi, 1);
+  lcd.print("kg   ");
+  lcd.setCursor(0, 1);
+  lcd.print((int)ppm); lcd.print("ppm ");
+  lcd.print(status.substring(0, 6));
+  lcd.print("      ");
+}
 
 // ================================================================
 //  FIREBASE REST API
@@ -283,8 +414,10 @@ bool firebasePut(String path, String body) {
   HTTPClient http;
   http.begin(String(FIREBASE_HOST) + path + ".json");
   http.addHeader("Content-Type", "application/json");
+  http.setTimeout(5000);
   int code = http.PUT(body);
   http.end();
+  if (code != 200) Serial.printf("[Firebase] PUT error HTTP %d: %s\n", code, path.c_str());
   return code == 200;
 }
 
@@ -293,109 +426,95 @@ bool firebasePost(String path, String body) {
   HTTPClient http;
   http.begin(String(FIREBASE_HOST) + path + ".json");
   http.addHeader("Content-Type", "application/json");
+  http.setTimeout(5000);
   int code = http.POST(body);
   http.end();
   return (code == 200 || code == 201);
 }
 
-String buildJson(float berat, float isi, int ppm,
-                 float suhu, float humid, String status, String id = "") {
+String buildLiveJson(float berat, float isi, float ppm,
+                     float suhu, float humid, String status) {
   StaticJsonDocument<300> doc;
-  if (id.length() > 0) doc["id"] = id;
-  doc["berat"]     = serialized(String(berat, 2));
-  doc["isi"]       = serialized(String(isi,   2));
-  doc["ppm"]       = ppm;
-  doc["suhu"]      = serialized(String(suhu,  1));
-  doc["humidity"]  = serialized(String(humid, 1));
-  doc["status"]    = status;
-  doc["timestamp"] = (unsigned long)millis();
-  doc["device_id"] = "ESP32-LPG-01";
+  doc["berat"]    = serialized(String(berat, 2));
+  doc["isi"]      = serialized(String(isi,   2));
+  doc["ppm"]      = (int)ppm;
+  doc["suhu"]     = serialized(String(suhu,  1));
+  doc["humidity"] = serialized(String(humid, 1));
+  doc["status"]   = status;
+  doc["timestamp"]= (unsigned long)millis();
+  doc["device_id"]= "ESP32-LPG-01";
   String out; serializeJson(doc, out);
   return out;
 }
 
-void kirimLive(float berat, float isi, int ppm, float suhu, float humid, String status) {
-  firebasePut("/live", buildJson(berat, isi, ppm, suhu, humid, status));
-}
-
-void kirimRaw(float berat, float isi, int ppm, float suhu, float humid, String status) {
-  firebasePost("/raw", buildJson(berat, isi, ppm, suhu, humid, status));
-}
-
-void kirimHistory(float berat, float isi, int ppm,
-                  String status, float suhu, float humid) {
-  unsigned long ts = millis();
-  String id = "HIST-" + String(ts);
-
+String buildHistoryJson(String id, float berat, float isi, float ppm,
+                        String status, float suhu, float humid,
+                        unsigned long ts) {
   StaticJsonDocument<400> doc;
   doc["id"]           = id;
   doc["berat_avg"]    = serialized(String(berat, 2));
   doc["isi_avg"]      = serialized(String(isi,   2));
-  doc["ppm_avg"]      = ppm;
-  doc["ppm_max"]      = ppm;
-  doc["ppm_min"]      = ppm;
+  doc["ppm_avg"]      = (int)ppm;
+  doc["ppm_max"]      = (int)ppm;
+  doc["ppm_min"]      = (int)ppm;
   doc["suhu_avg"]     = serialized(String(suhu,  1));
   doc["humidity_avg"] = serialized(String(humid, 1));
   doc["status"]       = status;
   doc["sample_count"] = 1;
   doc["timestamp"]    = ts;
   doc["device_id"]    = "ESP32-LPG-01";
-
-  String body; serializeJson(doc, body);
-  if (firebasePut("/history/" + id, body)) {
-    Serial.println("Firebase /history OK: " + id);
-  }
+  String out; serializeJson(doc, out);
+  return out;
 }
 
+void kirimLive(float berat, float isi, float ppm,
+               float suhu, float humid, String status) {
+  firebasePut("/live", buildLiveJson(berat, isi, ppm, suhu, humid, status));
+}
 
-// ================================================================
-//  APPS SCRIPT doPost — langsung ke Spreadsheet
-// ================================================================
-void kirimKeAppsScript(float berat, float isi, int ppm,
+void kirimRaw(float berat, float isi, float ppm,
+              float suhu, float humid, String status) {
+  firebasePost("/raw", buildLiveJson(berat, isi, ppm, suhu, humid, status));
+}
+
+void kirimHistory(float berat, float isi, float ppm,
+                  String status, float suhu, float humid) {
+  unsigned long ts = millis();
+  String id   = "HIST-" + String(ts);
+  String body = buildHistoryJson(id, berat, isi, ppm, status, suhu, humid, ts);
+  if (firebasePut("/history/" + id, body))
+    Serial.println("[Firebase] /history OK: " + id);
+}
+
+void kirimKeAppsScript(float berat, float isi, float ppm,
                        String status, float suhu, float humid) {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Skip GAS: WiFi tidak terhubung");
+    Serial.println("[GAS] Skip — WiFi tidak terhubung");
     return;
   }
   if (String(GAS_ENDPOINT).indexOf("GANTI") >= 0) {
-    Serial.println("Skip GAS: URL belum diisi");
+    Serial.println("[GAS] Skip — URL Apps Script belum diisi");
     return;
   }
-
   unsigned long ts = millis();
-  String id = "HIST-" + String(ts);
+  String id   = "HIST-" + String(ts);
+  String body = buildHistoryJson(id, berat, isi, ppm, status, suhu, humid, ts);
 
-  StaticJsonDocument<400> doc;
-  doc["id"]           = id;
-  doc["berat_avg"]    = serialized(String(berat, 2));
-  doc["isi_avg"]      = serialized(String(isi,   2));
-  doc["ppm_avg"]      = ppm;
-  doc["ppm_max"]      = ppm;
-  doc["ppm_min"]      = ppm;
-  doc["suhu_avg"]     = serialized(String(suhu,  1));
-  doc["humidity_avg"] = serialized(String(humid, 1));
-  doc["status"]       = status;
-  doc["sample_count"] = 1;
-  doc["timestamp"]    = ts;
-  doc["device_id"]    = "ESP32-LPG-01";
-
-  String body; serializeJson(doc, body);
-
+  Serial.println("[GAS] Mengirim ke Spreadsheet...");
   HTTPClient http;
   http.begin(GAS_ENDPOINT);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.addHeader("Content-Type", "application/json");
-
+  http.setTimeout(10000);
   int    code = http.POST(body);
   String resp = http.getString();
   http.end();
-
-  Serial.printf("GAS doPost: HTTP %d | %s\n", code, resp.c_str());
+  Serial.printf("[GAS] HTTP %d | %s\n", code, resp.c_str());
+  if (code == 200) Serial.println("[GAS] Spreadsheet berhasil!");
 }
 
-
 // ================================================================
-//  HELPER LCD
+//  LCD HELPER
 // ================================================================
 void lcdCenter(String text, int row) {
   int pos = max(0, (16 - (int)text.length()) / 2);

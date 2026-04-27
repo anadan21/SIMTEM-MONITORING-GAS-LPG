@@ -1,8 +1,8 @@
 {
   "live": {
-    "berat":     8.42,
-    "isi":       3.42,
-    "ppm":       87,
+    "berat":     8.05,
+    "isi":       3.05,
+    "ppm":       312,
     "suhu":      29.1,
     "humidity":  64.0,
     "status":    "LAYAK",
@@ -11,10 +11,10 @@
   },
 
   "raw": {
-    "-NxABC123def": {
-      "berat":     8.42,
-      "isi":       3.42,
-      "ppm":       87,
+    "-NxRAW001": {
+      "berat":     8.05,
+      "isi":       3.05,
+      "ppm":       312,
       "suhu":      29.1,
       "humidity":  64.0,
       "status":    "LAYAK",
@@ -26,11 +26,11 @@
   "history": {
     "HIST-1714000600000": {
       "id":           "HIST-1714000600000",
-      "berat_avg":    8.42,
-      "isi_avg":      3.42,
-      "ppm_avg":      87,
-      "ppm_max":      102,
-      "ppm_min":      74,
+      "berat_avg":    8.05,
+      "isi_avg":      3.05,
+      "ppm_avg":      312,
+      "ppm_max":      340,
+      "ppm_min":      290,
       "suhu_avg":     29.1,
       "humidity_avg": 64.0,
       "status":       "LAYAK",
@@ -40,11 +40,11 @@
     },
     "HIST-1714001200000": {
       "id":           "HIST-1714001200000",
-      "berat_avg":    6.10,
-      "isi_avg":      1.10,
-      "ppm_avg":      142,
-      "ppm_max":      158,
-      "ppm_min":      130,
+      "berat_avg":    6.80,
+      "isi_avg":      1.80,
+      "ppm_avg":      280,
+      "ppm_max":      295,
+      "ppm_min":      265,
       "suhu_avg":     29.4,
       "humidity_avg": 65.0,
       "status":       "KURANG",
@@ -54,11 +54,11 @@
     },
     "HIST-1714001800000": {
       "id":           "HIST-1714001800000",
-      "berat_avg":    7.92,
-      "isi_avg":      2.92,
-      "ppm_avg":      412,
-      "ppm_max":      438,
-      "ppm_min":      390,
+      "berat_avg":    7.98,
+      "isi_avg":      2.98,
+      "ppm_avg":      1250,
+      "ppm_max":      1380,
+      "ppm_min":      1120,
       "suhu_avg":     30.2,
       "humidity_avg": 66.0,
       "status":       "BOCOR",

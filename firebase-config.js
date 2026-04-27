@@ -1,7 +1,6 @@
 // ================================================================
-// FIREBASE CONFIG — JANGAN DI-COMMIT KE GIT
+// FIREBASE CONFIG — JANGAN DI-COMMIT KE GITHUB
 // File ini sudah ada di .gitignore
-// Salin dari firebase-config.example.js lalu isi nilainya
 // ================================================================
 
 export const firebaseConfig = {
