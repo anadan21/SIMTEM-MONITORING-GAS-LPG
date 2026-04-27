@@ -1,6 +1,6 @@
 // ================================================================
-// FIREBASE CONFIG — JANGAN DI-COMMIT KE GITHUB
-// File ini sudah ada di .gitignore
+// FIREBASE CONFIG
+// File ini harus ada di GitHub agar Vercel bisa membaca config.
 // ================================================================
 
 export const firebaseConfig = {

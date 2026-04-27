@@ -13,7 +13,7 @@
 
   <div class="app">
 
-    <!-- ══ HEADER ══════════════════════════════════════════════════ -->
+    <!-- HEADER -->
     <header class="site-header">
       <div class="brand">
         <div class="brand-badge">PANGKALAN LPG</div>
@@ -28,7 +28,7 @@
       </div>
     </header>
 
-    <!-- ══ VERDICT PANEL ══════════════════════════════════════════ -->
+    <!-- VERDICT PANEL -->
     <div class="verdict-panel v-menunggu" id="verdict-panel">
       <div class="verdict-inner">
         <div class="verdict-indicator" id="verdict-indicator">—</div>
@@ -45,7 +45,7 @@
       </div>
     </div>
 
-    <!-- ══ SENSOR CARDS ════════════════════════════════════════════ -->
+    <!-- SENSOR CARDS -->
     <div class="sec-label">Pembacaan Sensor Realtime</div>
     <div class="measurement-grid">
 
@@ -62,7 +62,7 @@
       </div>
 
       <div class="mcard">
-        <div class="mcard-icon"></div>
+        <div class="mcard-icon">🛢️</div>
         <div class="mcard-label">Berat Isi LPG (Netto)</div>
         <div class="mcard-value" id="val-isi">—</div>
         <div class="mcard-unit">kg &nbsp;|&nbsp; standar: 3.00 kg</div>
@@ -74,21 +74,21 @@
       </div>
 
       <div class="mcard">
-        <div class="mcard-icon"></div>
+        <div class="mcard-icon">💨</div>
         <div class="mcard-label">Kadar Gas LPG</div>
         <div class="mcard-value" id="val-ppm">—</div>
         <div class="mcard-unit">ppm &nbsp;|&nbsp; MQ-6 &nbsp;|&nbsp; batas: 1000 ppm</div>
       </div>
 
       <div class="mcard">
-        <div class="mcard-icon"></div>
+        <div class="mcard-icon">🌡️</div>
         <div class="mcard-label">Suhu Lingkungan</div>
         <div class="mcard-value" id="val-suhu">—</div>
         <div class="mcard-unit">°C &nbsp;|&nbsp; sensor DHT22</div>
       </div>
 
       <div class="mcard">
-        <div class="mcard-icon"></div>
+        <div class="mcard-icon">💧</div>
         <div class="mcard-label">Kelembapan</div>
         <div class="mcard-value" id="val-humid">—</div>
         <div class="mcard-unit">%RH &nbsp;|&nbsp; sensor DHT22</div>
@@ -96,20 +96,20 @@
 
     </div>
 
-    <!-- ══ GAUGE ROW ═══════════════════════════════════════════════ -->
+    <!-- GAUGE ROW -->
     <div class="sec-label">Indikator Utama</div>
     <div class="gauge-row">
 
       <!-- Gas Gauge -->
       <div class="gauge-panel">
         <div class="gauge-header">
-          <span class="gauge-title"> Kadar Gas LPG — Sensor MQ-6 (ppm)</span>
+          <span class="gauge-title">💨 Kadar Gas LPG — Sensor MQ-6</span>
           <span class="gauge-pct" id="gas-pct">—</span>
         </div>
         <div class="ppm-big" id="ppm-big" style="color:var(--idle);">—</div>
         <div class="gauge-track">
           <div class="gauge-fill" id="gas-fill" style="width:0%;"></div>
-          <!-- Garis batas bocor di 1000 ppm = 20% dari 5000 max -->
+          <!-- Garis batas bocor: 1000/5000 = 20% -->
           <div class="gauge-limit-line" style="left:20%;" title="Batas bocor: 1000 ppm"></div>
         </div>
         <div class="gauge-scale">
@@ -130,13 +130,13 @@
           <div class="weight-val-big" id="weight-val" style="color:var(--idle);">— kg</div>
           <div class="weight-standard">
             <div>≥ 7.91 kg &rarr; LAYAK JUAL</div>
-            <div>5.10–7.90 kg &rarr; KURANG ISI</div>
+            <div>5.10 – 7.90 kg &rarr; KURANG ISI</div>
             <div>&lt; 5.10 kg &rarr; KOSONG</div>
           </div>
         </div>
         <div class="gauge-track" id="gauge-track-berat">
           <div class="gauge-fill" style="width:0%;"></div>
-          <!-- Garis batas minimum layak = 7.91/10 = 79.1% -->
+          <!-- Garis batas minimum layak: 7.91/10 = 79.1% -->
           <div class="gauge-limit-line" style="left:79.1%;" title="Batas minimum LAYAK: 7.91 kg"></div>
         </div>
         <div class="gauge-scale">
@@ -149,7 +149,7 @@
 
     </div>
 
-    <!-- ══ STATS REKAP ═════════════════════════════════════════════ -->
+    <!-- STATS REKAP -->
     <div class="sec-label">Rekap Pemeriksaan</div>
     <div class="stats-row">
       <div class="stat-card">
@@ -170,7 +170,7 @@
       </div>
     </div>
 
-    <!-- ══ GRAFIK REALTIME ══════════════════════════════════════════ -->
+    <!-- GRAFIK REALTIME -->
     <div class="sec-label">Grafik Realtime</div>
     <div class="chart-section">
       <div class="chart-header">
@@ -187,7 +187,7 @@
       </div>
     </div>
 
-    <!-- ══ FOOTER ══════════════════════════════════════════════════ -->
+    <!-- FOOTER -->
     <footer class="site-footer">
       <div class="footer-left">
         <div class="fitem">
@@ -200,7 +200,7 @@
         </div>
         <div class="fitem">
           <div class="fitem-dot"></div>
-          Sensor: MQ-6 + HX711 + DHT22
+          MQ-6 + HX711 + DHT22
         </div>
       </div>
       <div class="fitem">Pangkalan Gas — Sistem QC LPG v3.0</div>

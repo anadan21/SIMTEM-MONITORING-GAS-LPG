@@ -2,70 +2,68 @@
  * js/dashboard.js
  * Logic dashboard QC LPG Pangkalan Gas
  *
- * Konteks sistem:
- *   Tabung LPG 3 kg datang dari SPBE → diletakkan di timbangan
- *   → ESP32 timbang + baca PPM gas (sensor MQ-6)
- *   → Dashboard tampilkan kondisi tabung secara realtime
- *   → Saat tabung diangkat → hasil otomatis terkirim ke Spreadsheet
+ * Membaca data dari Firebase /live secara realtime.
+ * Field yang dibaca dari Firebase:
+ *   berat    — berat total tabung (kg)
+ *   isi      — berat isi LPG tanpa tabung (kg)
+ *   ppm      — kadar gas LPG dari sensor MQ-6
+ *   suhu     — suhu dari DHT22 (°C)
+ *   humidity — kelembapan dari DHT22 (%RH)
+ *   status   — LAYAK / KURANG / BOCOR / KOSONG
+ *   timestamp, device_id
  *
- * Threshold (Regulasi Pertamina tabung LPG 3 kg):
- *   Berat tabung kosong  : 5.0  kg
- *   Berat total ideal    : 8.0  kg
- *   Berat minimum LAYAK  : 7.91 kg (toleransi 90 gram dari standar 8 kg)
- *   Batas KURANG ISI     : > 5.1 kg (ada isi tapi di bawah standar)
- *   KOSONG               : <= 5.1 kg (hanya tabung kosong)
- *
- * Ambang batas gas MQ-6 (ppm LPG):
- *   Normal (aman)        : < 1000 ppm
- *   BOCOR                : >= 1000 ppm
- *   Referensi: OSHA & standar industri LPG
- *              LEL LPG = 18.000 ppm, alarm awal di 10% LEL = 1800 ppm
- *              Praktis di lapangan: 1000 ppm sudah perlu tindakan
+ * Threshold Regulasi Pertamina tabung LPG 3 kg:
+ *   BOCOR  : ppm >= 1000
+ *   LAYAK  : berat >= 7.91 kg
+ *   KURANG : berat >= 5.1  kg
+ *   KOSONG : berat <  5.1  kg
  */
 
 import { db } from './firebase-init.js';
 import { ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
+// ── Shorthand ─────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
-// ── Threshold — HARUS SAMA dengan code_arduino.cpp ───────────────
+// ── Threshold ─────────────────────────────────────────────────────
 const CFG = {
-  PPM_BOCOR:    1000,   // ppm — ambang batas bocor MQ-6 output nyata
-  BERAT_LAYAK:  7.91,   // kg  — batas minimum layak jual (Pertamina)
-  BERAT_KURANG: 5.1,    // kg  — batas bawah ada isi LPG
-  BERAT_TABUNG: 5.0,    // kg  — berat tabung kosong
-  BERAT_MAX:    10.0,   // kg  — skala maksimum gauge
-  PPM_MAX:      5000,   // ppm — skala maksimum gauge
+  PPM_BOCOR:    1000,
+  BERAT_LAYAK:  7.91,
+  BERAT_KURANG: 5.1,
+  BERAT_TABUNG: 5.0,
+  BERAT_MAX:    10.0,
+  PPM_MAX:      5000,
 };
 
-// ── Konfigurasi teks per status ───────────────────────────────────
+// ── Teks per status ───────────────────────────────────────────────
 const VERDICT = {
   LAYAK: {
-    panelCls: 'v-layak',
-    icon:     'LAYAK',
-    code:     'LAYAK JUAL',
-    desc:     'Tabung memenuhi standar Pertamina. Berat isi sesuai (>= 7.91 kg) dan kadar gas dalam batas aman. Tabung siap didistribusikan ke konsumen.',
+    cls:  'v-layak',
+    icon: 'LAYAK',
+    code: 'LAYAK JUAL',
+    desc: 'Tabung memenuhi standar Pertamina. Berat isi sesuai (≥ 7.91 kg) dan kadar gas dalam batas aman. Siap didistribusikan ke konsumen.',
   },
   KURANG: {
-    panelCls: 'v-kurang',
-    icon:     'KURANG',
-    code:     'ISI KURANG',
-    desc:     'Berat isi LPG di bawah standar minimum Pertamina (7.91 kg). Tabung perlu dikembalikan ke SPBE untuk pengisian ulang sebelum dijual.',
+    cls:  'v-kurang',
+    icon: 'KURANG',
+    code: 'ISI KURANG',
+    desc: 'Berat isi LPG di bawah standar minimum Pertamina (7.91 kg). Tabung perlu dikembalikan ke SPBE untuk pengisian ulang.',
   },
   BOCOR: {
-    panelCls: 'v-bocor',
-    icon:     'BOCOR',
-    code:     'GAS BOCOR',
-    desc:     'PERINGATAN: Kadar gas LPG terdeteksi melebihi ambang batas (>= 1000 ppm). Tabung DILARANG DIJUAL. Amankan tabung, jauhkan dari api, dan laporkan ke SPBE.',
+    cls:  'v-bocor',
+    icon: 'BOCOR',
+    code: 'GAS BOCOR',
+    desc: 'PERINGATAN: Kadar gas LPG melebihi ambang batas (≥ 1000 ppm). Tabung DILARANG DIJUAL. Jauhkan dari api dan laporkan ke SPBE.',
   },
   KOSONG: {
-    panelCls: 'v-menunggu',
-    icon:     '—',
-    code:     'MENUNGGU',
-    desc:     'Belum ada tabung di atas timbangan. Letakkan tabung LPG yang baru datang dari SPBE untuk memulai pemeriksaan kualitas.',
+    cls:  'v-menunggu',
+    icon: '—',
+    code: 'MENUNGGU',
+    desc: 'Belum ada tabung di atas timbangan. Letakkan tabung LPG yang baru datang dari SPBE untuk memulai pemeriksaan.',
   },
 };
 
+// ── Helper ────────────────────────────────────────────────────────
 function getStatus(ppm, berat) {
   if (berat <= CFG.BERAT_KURANG) return 'KOSONG';
   if (ppm >= CFG.PPM_BOCOR)      return 'BOCOR';
@@ -74,9 +72,9 @@ function getStatus(ppm, berat) {
 }
 
 function ppmColor(ppm) {
-  if (ppm < CFG.PPM_BOCOR * 0.5) return 'var(--ok)';    // < 500 ppm — aman
-  if (ppm < CFG.PPM_BOCOR)       return 'var(--warn)';  // 500-999 ppm — waspada
-  return 'var(--danger)';                                 // >= 1000 ppm — bocor
+  if (ppm < 500)              return 'var(--ok)';
+  if (ppm < CFG.PPM_BOCOR)   return 'var(--warn)';
+  return 'var(--danger)';
 }
 
 function beratColor(berat) {
@@ -92,24 +90,27 @@ function flash(el) {
   el.classList.add('flash');
 }
 
+function setEl(id, val) {
+  const el = $(id);
+  if (el) el.textContent = val;
+}
+
+// ── Update Verdict Panel ──────────────────────────────────────────
 function updateVerdict(status) {
   const v = VERDICT[status] || VERDICT.KOSONG;
   const panel = $('verdict-panel');
-  if (panel) panel.className = 'verdict-panel ' + v.panelCls;
+  if (panel) panel.className = 'verdict-panel ' + v.cls;
   const ind = $('verdict-indicator');
   if (ind) {
     ind.textContent = v.icon;
     ind.className   = 'verdict-indicator' + (status === 'BOCOR' ? ' pulsing' : '');
   }
-  const code = $('verdict-code');
-  if (code) code.textContent = v.code;
-  const desc = $('verdict-desc');
-  if (desc) desc.textContent = v.desc;
+  setEl('verdict-code', v.code);
+  setEl('verdict-desc', v.desc);
 }
 
-// ── Listen /live realtime ─────────────────────────────────────────
-const liveRef = ref(db, '/live');
-onValue(liveRef, (snap) => {
+// ── Listen /live ──────────────────────────────────────────────────
+onValue(ref(db, '/live'), (snap) => {
   const data = snap.val();
   if (!data) return;
 
@@ -119,23 +120,24 @@ onValue(liveRef, (snap) => {
   const suhu  = Number(data.suhu     ?? 0);
   const humid = Number(data.humidity ?? 0);
 
-  // Update kartu nilai
-  const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
-  set('val-berat', berat.toFixed(2));
-  set('val-isi',   isi.toFixed(2));
-  set('val-ppm',   ppm.toFixed(0));
-  set('val-suhu',  suhu.toFixed(1));
-  set('val-humid', humid.toFixed(0));
+  // Update nilai kartu
+  setEl('val-berat', berat.toFixed(2));
+  setEl('val-isi',   isi.toFixed(2));
+  setEl('val-ppm',   ppm.toFixed(0));
+  setEl('val-suhu',  suhu.toFixed(1));
+  setEl('val-humid', humid.toFixed(0));
 
-  ['val-berat','val-isi','val-ppm','val-suhu','val-humid'].forEach(id => flash($(id)));
+  // Animasi flash
+  ['val-berat','val-isi','val-ppm','val-suhu','val-humid']
+    .forEach(id => flash($(id)));
 
-  // Mini bar berat
+  // Mini bar berat total
   const beratPct = Math.min(100, (berat / CFG.BERAT_MAX) * 100);
   const bf = $('berat-fill');
   if (bf) { bf.style.width = beratPct + '%'; bf.style.background = beratColor(berat); }
 
-  const isiMax = CFG.BERAT_MAX - CFG.BERAT_TABUNG;
-  const isiPct = Math.min(100, (isi / isiMax) * 100);
+  // Mini bar berat isi
+  const isiPct = Math.min(100, (isi / (CFG.BERAT_MAX - CFG.BERAT_TABUNG)) * 100);
   const ibf = $('isi-fill');
   if (ibf) { ibf.style.width = isiPct + '%'; ibf.style.background = beratColor(berat); }
 
@@ -145,9 +147,8 @@ onValue(liveRef, (snap) => {
   const ppmBig = $('ppm-big');
   if (ppmBig) { ppmBig.textContent = ppm.toFixed(0); ppmBig.style.color = ppmClr; }
   const gf = $('gas-fill');
-  if (gf) { gf.style.width = ppmPct + '%'; gf.style.background = ppmClr; }
-  const gp = $('gas-pct');
-  if (gp) gp.textContent = ppmPct.toFixed(0) + '%';
+  if (gf)  { gf.style.width = ppmPct + '%'; gf.style.background = ppmClr; }
+  setEl('gas-pct', ppmPct.toFixed(0) + '%');
 
   // Berat gauge
   const wv = $('weight-val');
@@ -157,8 +158,7 @@ onValue(liveRef, (snap) => {
     const wf = wTrack.querySelector('.gauge-fill');
     if (wf) { wf.style.width = beratPct + '%'; wf.style.background = beratColor(berat); }
   }
-  const wp = $('weight-pct');
-  if (wp) wp.textContent = beratPct.toFixed(0) + '%';
+  setEl('weight-pct', beratPct.toFixed(0) + '%');
 
   // Verdict
   updateVerdict(getStatus(ppm, berat));
@@ -166,12 +166,11 @@ onValue(liveRef, (snap) => {
   // Timestamp
   if (data.timestamp) {
     const dt = new Date(Number(data.timestamp));
-    const tb = $('time-badge');
-    if (tb) tb.textContent = dt.toLocaleTimeString('id-ID');
+    setEl('time-badge', dt.toLocaleTimeString('id-ID'));
   }
 
-  const fd = $('footer-device');
-  if (fd && data.device_id) fd.textContent = data.device_id;
+  // Device ID
+  if (data.device_id) setEl('footer-device', data.device_id);
 });
 
 // ── Koneksi badge ─────────────────────────────────────────────────
@@ -204,10 +203,9 @@ onValue(ref(db, '/history'), (snap) => {
     if (s === 'BOCOR')  bocor++;
   });
 
-  const setVal = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-  setVal('stat-layak',    layak);
-  setVal('stat-kurang',   kurang);
-  setVal('stat-bocor',    bocor);
-  setVal('stat-total',    total);
-  setVal('session-count', total);
+  setEl('stat-layak',    layak);
+  setEl('stat-kurang',   kurang);
+  setEl('stat-bocor',    bocor);
+  setEl('stat-total',    total);
+  setEl('session-count', total);
 });
