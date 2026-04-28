@@ -8,7 +8,7 @@
  *   Berat tabung kosong (tare)     : ±5.0  kg
  *   Berat isi LPG (netto)          :  3.0  kg
  *   Berat total ideal (bruto)      :  8.0  kg
- *   Toleransi pengurangan maks     :  90   gram
+ *   Toleransi pengurangan maks     :  90   gram  
  *   Berat minimum LAYAK JUAL       :  7.91 kg
  *
  * SENSOR GAS MQ-6:
