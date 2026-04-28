@@ -4,212 +4,189 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sistem QC LPG — Pangkalan Gas</title>
+
+  <!-- FONT -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- CSS -->
   <link rel="stylesheet" href="css/style.css" />
+
+  <!-- CHART -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
+
 <body>
 
-  <div class="top-strip"></div>
+<div class="top-strip"></div>
 
-  <div class="app">
+<div class="app">
 
-    <!-- HEADER -->
-    <header class="site-header">
-      <div class="brand">
-        <div class="brand-badge">PANGKALAN LPG</div>
-        <div>
-          <div class="brand-title">Sistem QC Tabung Gas</div>
-          <div class="brand-sub">Quality Control Monitoring — IoT ESP32 + MQ-6</div>
-        </div>
-      </div>
-      <div class="header-right">
-        <div class="hchip hchip-time" id="time-badge">— menunggu data —</div>
-        <div class="hchip hchip-conn" id="conn-badge">○ CONNECTING</div>
-      </div>
-    </header>
-
-    <!-- VERDICT PANEL -->
-    <div class="verdict-panel v-menunggu" id="verdict-panel">
-      <div class="verdict-inner">
-        <div class="verdict-indicator" id="verdict-indicator">—</div>
-        <div>
-          <div class="verdict-code" id="verdict-code">MENUNGGU</div>
-          <div class="verdict-desc"  id="verdict-desc">
-            Belum ada tabung di atas timbangan. Letakkan tabung LPG yang baru datang dari SPBE untuk memulai pemeriksaan kualitas.
-          </div>
-        </div>
-        <div class="verdict-meta">
-          <div class="verdict-counter">Total tabung diperiksa</div>
-          <div class="verdict-count-val" id="session-count">0</div>
-        </div>
+  <!-- HEADER -->
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-badge">PANGKALAN LPG</div>
+      <div>
+        <div class="brand-title">Sistem QC Tabung Gas</div>
+        <div class="brand-sub">IoT Monitoring — ESP32 + MQ-6 + HX711</div>
       </div>
     </div>
 
-    <!-- SENSOR CARDS -->
-    <div class="sec-label">Pembacaan Sensor Realtime</div>
-    <div class="measurement-grid">
-
-      <div class="mcard">
-        <div class="mcard-icon">⚖️</div>
-        <div class="mcard-label">Berat Total (Bruto)</div>
-        <div class="mcard-value" id="val-berat">—</div>
-        <div class="mcard-unit">kg &nbsp;|&nbsp; standar: 8.00 kg</div>
-        <div class="mcard-bar">
-          <div class="mcard-bar-track">
-            <div class="mcard-bar-fill" id="berat-fill" style="width:0%;background:var(--idle);"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mcard">
-        <div class="mcard-icon">🛢️</div>
-        <div class="mcard-label">Berat Isi LPG (Netto)</div>
-        <div class="mcard-value" id="val-isi">—</div>
-        <div class="mcard-unit">kg &nbsp;|&nbsp; standar: 3.00 kg</div>
-        <div class="mcard-bar">
-          <div class="mcard-bar-track">
-            <div class="mcard-bar-fill" id="isi-fill" style="width:0%;background:var(--idle);"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mcard">
-        <div class="mcard-icon">💨</div>
-        <div class="mcard-label">Kadar Gas LPG</div>
-        <div class="mcard-value" id="val-ppm">—</div>
-        <div class="mcard-unit">ppm &nbsp;|&nbsp; MQ-6 &nbsp;|&nbsp; batas: 1000 ppm</div>
-      </div>
-
-      <div class="mcard">
-        <div class="mcard-icon">🌡️</div>
-        <div class="mcard-label">Suhu Lingkungan</div>
-        <div class="mcard-value" id="val-suhu">—</div>
-        <div class="mcard-unit">°C &nbsp;|&nbsp; sensor DHT22</div>
-      </div>
-
-      <div class="mcard">
-        <div class="mcard-icon">💧</div>
-        <div class="mcard-label">Kelembapan</div>
-        <div class="mcard-value" id="val-humid">—</div>
-        <div class="mcard-unit">%RH &nbsp;|&nbsp; sensor DHT22</div>
-      </div>
-
+    <div class="header-right">
+      <div class="hchip hchip-time" id="time-badge">—</div>
+      <div class="hchip hchip-conn" id="conn-badge">○ FIREBASE</div>
     </div>
+  </header>
 
-    <!-- GAUGE ROW -->
-    <div class="sec-label">Indikator Utama</div>
-    <div class="gauge-row">
+  <!-- VERDICT -->
+  <div class="verdict-panel v-menunggu" id="verdict-panel">
+    <div class="verdict-inner">
+      <div class="verdict-indicator" id="verdict-indicator">—</div>
 
-      <!-- Gas Gauge -->
-      <div class="gauge-panel">
-        <div class="gauge-header">
-          <span class="gauge-title">💨 Kadar Gas LPG — Sensor MQ-6</span>
-          <span class="gauge-pct" id="gas-pct">—</span>
-        </div>
-        <div class="ppm-big" id="ppm-big" style="color:var(--idle);">—</div>
-        <div class="gauge-track">
-          <div class="gauge-fill" id="gas-fill" style="width:0%;"></div>
-          <!-- Garis batas bocor: 1000/5000 = 20% -->
-          <div class="gauge-limit-line" style="left:20%;" title="Batas bocor: 1000 ppm"></div>
-        </div>
-        <div class="gauge-scale">
-          <span>0</span>
-          <span style="color:var(--accent);">1000 — batas bocor</span>
-          <span>2500</span>
-          <span>5000 ppm</span>
+      <div>
+        <div class="verdict-code" id="verdict-code">MENUNGGU</div>
+        <div class="verdict-desc" id="verdict-desc">
+          Letakkan tabung LPG untuk memulai pemeriksaan.
         </div>
       </div>
 
-      <!-- Berat Gauge -->
-      <div class="gauge-panel">
-        <div class="gauge-header">
-          <span class="gauge-title">⚖️ Berat Tabung — Load Cell HX711</span>
-          <span class="gauge-pct" id="weight-pct">—</span>
-        </div>
-        <div class="weight-label-row">
-          <div class="weight-val-big" id="weight-val" style="color:var(--idle);">— kg</div>
-          <div class="weight-standard">
-            <div>≥ 7.91 kg &rarr; LAYAK JUAL</div>
-            <div>5.10 – 7.90 kg &rarr; KURANG ISI</div>
-            <div>&lt; 5.10 kg &rarr; KOSONG</div>
-          </div>
-        </div>
-        <div class="gauge-track" id="gauge-track-berat">
-          <div class="gauge-fill" style="width:0%;"></div>
-          <!-- Garis batas minimum layak: 7.91/10 = 79.1% -->
-          <div class="gauge-limit-line" style="left:79.1%;" title="Batas minimum LAYAK: 7.91 kg"></div>
-        </div>
-        <div class="gauge-scale">
-          <span>0</span>
-          <span>5.10</span>
-          <span style="color:var(--accent);">7.91</span>
-          <span>10 kg</span>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- STATS REKAP -->
-    <div class="sec-label">Rekap Pemeriksaan</div>
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Total Diperiksa</div>
-        <div class="stat-val c-accent" id="stat-total">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Layak Jual</div>
-        <div class="stat-val c-ok" id="stat-layak">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Isi Kurang</div>
-        <div class="stat-val c-warn" id="stat-kurang">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Gas Bocor</div>
-        <div class="stat-val c-danger" id="stat-bocor">0</div>
+      <div class="verdict-meta">
+        <div>Total diperiksa</div>
+        <div class="verdict-count-val" id="session-count">0</div>
       </div>
     </div>
+  </div>
 
-    <!-- GRAFIK REALTIME -->
-    <div class="sec-label">Grafik Realtime</div>
-    <div class="chart-section">
-      <div class="chart-header">
-        <div class="chart-title">Riwayat Pembacaan Sensor (30 data terakhir)</div>
-        <div class="chart-tabs">
-          <button class="ctab active" data-tab="ppm"   onclick="switchChartTab('ppm')">PPM Gas</button>
-          <button class="ctab"        data-tab="berat" onclick="switchChartTab('berat')">Berat</button>
-          <button class="ctab"        data-tab="suhu"  onclick="switchChartTab('suhu')">Suhu</button>
-          <button class="ctab"        data-tab="humid" onclick="switchChartTab('humid')">Humid</button>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap">
-        <canvas id="realtime-chart"></canvas>
-      </div>
+  <!-- SENSOR -->
+  <div class="sec-label">Pembacaan Sensor</div>
+  <div class="measurement-grid">
+
+    <div class="mcard">
+      <div class="mcard-label">Berat Total</div>
+      <div class="mcard-value" id="val-berat">—</div>
+      <div class="mcard-unit">kg</div>
     </div>
 
-    <!-- FOOTER -->
-    <footer class="site-footer">
-      <div class="footer-left">
-        <div class="fitem">
-          <div class="fitem-dot live"></div>
-          Device: <span id="footer-device">ESP32-LPG-01</span>
-        </div>
-        <div class="fitem">
-          <div class="fitem-dot"></div>
-          Firebase Realtime Database
-        </div>
-        <div class="fitem">
-          <div class="fitem-dot"></div>
-          MQ-6 + HX711 + DHT22
-        </div>
-      </div>
-      <div class="fitem">Pangkalan Gas — Sistem QC LPG v3.0</div>
-    </footer>
+    <div class="mcard">
+      <div class="mcard-label">Isi LPG</div>
+      <div class="mcard-value" id="val-isi">—</div>
+      <div class="mcard-unit">kg</div>
+    </div>
+
+    <div class="mcard">
+      <div class="mcard-label">Gas LPG</div>
+      <div class="mcard-value" id="val-ppm">—</div>
+      <div class="mcard-unit">ppm (batas: 50)</div>
+    </div>
+
+    <div class="mcard">
+      <div class="mcard-label">Suhu</div>
+      <div class="mcard-value" id="val-suhu">—</div>
+      <div class="mcard-unit">°C</div>
+    </div>
+
+    <div class="mcard">
+      <div class="mcard-label">Kelembapan</div>
+      <div class="mcard-value" id="val-humid">—</div>
+      <div class="mcard-unit">%RH</div>
+    </div>
 
   </div>
 
-  <script type="module" src="js/dashboard.js"></script>
-  <script type="module" src="js/chart.js"></script>
+  <!-- GAUGE -->
+  <div class="sec-label">Indikator</div>
+  <div class="gauge-row">
+
+    <!-- GAS -->
+    <div class="gauge-panel">
+      <div class="gauge-title">Gas LPG</div>
+
+      <div class="ppm-big" id="ppm-big">—</div>
+
+      <div class="gauge-track">
+        <div class="gauge-fill" id="gas-fill"></div>
+        <div class="gauge-limit-line" style="left:25%;"></div>
+      </div>
+
+      <div class="gauge-scale">
+        <span>0</span>
+        <span>50</span>
+        <span>100</span>
+        <span>200 ppm</span>
+      </div>
+    </div>
+
+    <!-- BERAT -->
+    <div class="gauge-panel">
+      <div class="gauge-title">Berat Tabung</div>
+
+      <div id="weight-val">— kg</div>
+
+      <div class="gauge-track" id="gauge-track-berat">
+        <div class="gauge-fill"></div>
+        <div class="gauge-limit-line" style="left:79%;"></div>
+      </div>
+
+      <div class="gauge-scale">
+        <span>0</span>
+        <span>5.1</span>
+        <span>7.91</span>
+        <span>10 kg</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- STATS -->
+  <div class="sec-label">Rekap</div>
+  <div class="stats-row">
+
+    <div class="stat-card">
+      <div>Total</div>
+      <div id="stat-total">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div>Layak</div>
+      <div id="stat-layak">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div>Kurang</div>
+      <div id="stat-kurang">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div>Bocor</div>
+      <div id="stat-bocor">0</div>
+    </div>
+
+  </div>
+
+  <!-- CHART -->
+  <div class="sec-label">Grafik Realtime</div>
+
+  <div class="chart-tabs">
+    <button class="ctab active" data-tab="ppm" onclick="switchChartTab('ppm')">PPM</button>
+    <button class="ctab" data-tab="berat" onclick="switchChartTab('berat')">Berat</button>
+    <button class="ctab" data-tab="suhu" onclick="switchChartTab('suhu')">Suhu</button>
+    <button class="ctab" data-tab="humid" onclick="switchChartTab('humid')">Humid</button>
+  </div>
+
+  <div class="chart-wrap">
+    <canvas id="realtime-chart"></canvas>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div>Device: <span id="footer-device">ESP32-LPG-01</span></div>
+    <div>Firebase Realtime</div>
+  </footer>
+
+</div>
+
+<!-- JS -->
+<script type="module" src="js/dashboard.js"></script>
+<script type="module" src="js/chart.js"></script>
 
 </body>
 </html>
