@@ -4,10 +4,10 @@ import { ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebas
 const MAX_POINTS = 30;
 
 const DATASETS = {
-  ppm:   { label: 'PPM Gas (MQ-6)', color: '#fbbf24', unit: 'ppm', yMax: 200 },
-  berat: { label: 'Berat Total',    color: '#22c55e', unit: 'kg',  yMax: 10  },
-  suhu:  { label: 'Suhu',           color: '#38bdf8', unit: '°C',  yMax: 50  },
-  humid: { label: 'Kelembapan',     color: '#a78bfa', unit: '%',   yMax: 100 },
+  ppm:   { label: 'PPM Gas (MQ-6)', color: 'warn-light', unit: 'ppm', yMax: 200 },
+  berat: { label: 'Berat Total',    color: 'ok-light', unit: 'kg',  yMax: 10  },
+  suhu:  { label: 'Suhu',           color: 'accent-light', unit: '°C',  yMax: 50  },
+  humid: { label: 'Kelembapan',     color: 'accent', unit: '%',   yMax: 100 },
 };
 
 let activeTab = 'ppm';
@@ -27,6 +27,12 @@ function safeNum(v) {
   return isNaN(n) ? 0 : n;
 }
 
+function getThemeColor(varName) {
+  const root = document.documentElement;
+  const style = getComputedStyle(root);
+  return style.getPropertyValue('--' + varName).trim();
+}
+
 function hexToRGBA(hex, alpha) {
   const r = parseInt(hex.slice(1,3), 16);
   const g = parseInt(hex.slice(3,5), 16);
@@ -36,6 +42,10 @@ function hexToRGBA(hex, alpha) {
 
 // ================= OPTIONS =================
 function buildOptions(cfg) {
+  const textColor = getThemeColor('text-3');
+  const gridColor = getThemeColor('border');
+  const bgColor = getThemeColor('surface-2');
+  
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -44,10 +54,12 @@ function buildOptions(cfg) {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#111827',
-        titleColor: '#9ca3af',
-        bodyColor: '#f9fafb',
-        padding: 10,
+        backgroundColor: bgColor,
+        titleColor: textColor,
+        bodyColor: getThemeColor('text-2'),
+        borderColor: getThemeColor('border-2'),
+        borderWidth: 1,
+        padding: 12,
         callbacks: {
           label: ctx => ` ${ctx.parsed.y} ${cfg.unit}`
         }
@@ -56,15 +68,15 @@ function buildOptions(cfg) {
 
     scales: {
       x: {
-        grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: '#6b7280', maxTicksLimit: 6 }
+        grid: { color: gridColor },
+        ticks: { color: textColor, maxTicksLimit: 6 }
       },
       y: {
         min: 0,
         max: cfg.yMax,
-        grid: { color: 'rgba(255,255,255,0.04)' },
+        grid: { color: gridColor },
         ticks: {
-          color: '#6b7280',
+          color: textColor,
           callback: v => v + ' ' + cfg.unit
         }
       }
@@ -78,6 +90,7 @@ function initChart() {
   if (!canvas || typeof Chart === 'undefined') return;
 
   const cfg = DATASETS[activeTab];
+  const color = getThemeColor(cfg.color);
 
   chartInstance = new Chart(canvas.getContext('2d'), {
     type: 'line',
@@ -86,8 +99,8 @@ function initChart() {
       datasets: [{
         label: cfg.label,
         data: history[activeTab],
-        borderColor: cfg.color,
-        backgroundColor: hexToRGBA(cfg.color, 0.08),
+        borderColor: color,
+        backgroundColor: hexToRGBA(color, 0.08),
         borderWidth: 2,
         pointRadius: 2,
         tension: 0.35,
@@ -104,12 +117,13 @@ function switchTab(tab) {
 
   activeTab = tab;
   const cfg = DATASETS[tab];
+  const color = getThemeColor(cfg.color);
 
   const ds = chartInstance.data.datasets[0];
   ds.label = cfg.label;
   ds.data = history[tab];
-  ds.borderColor = cfg.color;
-  ds.backgroundColor = hexToRGBA(cfg.color, 0.08);
+  ds.borderColor = color;
+  ds.backgroundColor = hexToRGBA(color, 0.08);
 
   chartInstance.options = buildOptions(cfg);
   chartInstance.update('none'); // 🔥 smooth

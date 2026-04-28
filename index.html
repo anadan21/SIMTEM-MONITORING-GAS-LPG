@@ -13,11 +13,16 @@
 
   <!-- CHART -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  
+  <!-- ICONS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- EXPORT LIBRARIES -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
 </head>
 
 <body>
-
-<div class="top-strip"></div>
 
 <div class="app">
 
@@ -34,6 +39,9 @@
     <div class="header-right">
       <div class="hchip hchip-time" id="time-badge">—</div>
       <div class="hchip hchip-conn" id="conn-badge">○ FIREBASE</div>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle Dark/Light Mode">
+        <i class="fas fa-moon"></i>
+      </button>
     </div>
   </header>
 
@@ -174,6 +182,49 @@
 
   <div class="chart-wrap">
     <canvas id="realtime-chart"></canvas>
+  </div>
+
+  <!-- EXPORT DATA -->
+  <div class="sec-label">Unduh Data</div>
+  <div class="export-section">
+    <div class="export-header">
+      <h3>Ekspor History</h3>
+      <span class="export-info">Unduh data pemeriksaan dalam format PDF atau Excel</span>
+    </div>
+    
+    <div class="export-buttons">
+      <button class="btn-export primary" onclick="exportToPDF()">
+        <i class="fas fa-file-pdf"></i>
+        Unduh PDF
+      </button>
+      <button class="btn-export" onclick="exportToExcel()">
+        <i class="fas fa-file-excel"></i>
+        Unduh Excel
+      </button>
+      <button class="btn-export" onclick="exportToCSV()">
+        <i class="fas fa-file-csv"></i>
+        Unduh CSV
+      </button>
+    </div>
+
+    <div class="export-stats">
+      <div class="export-stat">
+        <div class="export-stat-label">Total Data</div>
+        <div class="export-stat-value" id="export-total">0</div>
+      </div>
+      <div class="export-stat">
+        <div class="export-stat-label">Layak</div>
+        <div class="export-stat-value" id="export-layak">0</div>
+      </div>
+      <div class="export-stat">
+        <div class="export-stat-label">Kurang</div>
+        <div class="export-stat-value" id="export-kurang">0</div>
+      </div>
+      <div class="export-stat">
+        <div class="export-stat-label">Bocor</div>
+        <div class="export-stat-value" id="export-bocor">0</div>
+      </div>
+    </div>
   </div>
 
   <!-- FOOTER -->

@@ -3,6 +3,45 @@ import { ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebas
 
 const $ = id => document.getElementById(id);
 
+// ================= THEME TOGGLE =================
+function initThemeToggle() {
+  const toggle = $('theme-toggle');
+  if (!toggle) return;
+
+  // Load theme preference from localStorage
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  applyTheme(savedTheme);
+
+  // Toggle button click handler
+  toggle.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  });
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    const toggle = $('theme-toggle');
+    if (toggle) {
+      toggle.innerHTML = '<i class="fas fa-sun"></i>';
+      toggle.title = 'Switch to Dark Mode';
+    }
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    const toggle = $('theme-toggle');
+    if (toggle) {
+      toggle.innerHTML = '<i class="fas fa-moon"></i>';
+      toggle.title = 'Switch to Light Mode';
+    }
+  }
+}
+
+// Initialize theme on page load
+initThemeToggle();
+
 // ================= CONFIG =================
 const CFG = {
   PPM_BOCOR:    50,
@@ -171,9 +210,13 @@ onValue(ref(db, '.info/connected'), (snap) => {
 });
 
 // ================= HISTORY (REALTIME FIX) =================
+let historyData = {};
+
 onValue(ref(db, '/history'), (snap) => {
   const data = snap.val();
   if (!data) return;
+
+  historyData = data;
 
   let layak = 0, kurang = 0, bocor = 0, total = 0;
 
@@ -191,4 +234,175 @@ onValue(ref(db, '/history'), (snap) => {
   setEl('stat-bocor', bocor);
   setEl('stat-total', total);
   setEl('session-count', total);
+
+  // Update export stats
+  setEl('export-total', total);
+  setEl('export-layak', layak);
+  setEl('export-kurang', kurang);
+  setEl('export-bocor', bocor);
 });
+
+// ================= EXPORT FUNCTIONS =================
+function formatDate(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleString('id-ID', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function getHistoryTableData() {
+  if (!historyData || Object.keys(historyData).length === 0) {
+    alert('Tidak ada data untuk diunduh');
+    return null;
+  }
+
+  const rows = [];
+  let index = 1;
+
+  Object.entries(historyData)
+    .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))
+    .forEach(([key, record]) => {
+      rows.push({
+        'No.': index++,
+        'Tanggal Waktu': formatDate(record.timestamp),
+        'Berat (kg)': parseFloat(record.berat || 0).toFixed(2),
+        'Isi (kg)': parseFloat(record.isi || 0).toFixed(2),
+        'Gas PPM': parseFloat(record.ppm || 0).toFixed(0),
+        'Suhu (°C)': parseFloat(record.suhu || 0).toFixed(1),
+        'Kelembapan (%)': parseFloat(record.humidity || 0).toFixed(0),
+        'Status': record.status?.toUpperCase() || '—'
+      });
+    });
+
+  return rows;
+}
+
+window.exportToPDF = function() {
+  const data = getHistoryTableData();
+  if (!data) return;
+
+  const element = document.createElement('div');
+  element.style.padding = '20px';
+  element.style.fontFamily = 'Arial, sans-serif';
+  
+  // Header
+  const header = `
+    <h1 style="text-align: center; color: #1a2540; margin-bottom: 10px;">Laporan QC Tabung Gas LPG</h1>
+    <p style="text-align: center; color: #666; margin-bottom: 20px;">Pangkalan Gas LPG - ${new Date().toLocaleDateString('id-ID')}</p>
+    <hr style="border: 1px solid #ddd; margin-bottom: 20px;">
+  `;
+
+  // Summary stats
+  const stats = `
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
+      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
+        <strong style="color: #666;">Total Data</strong><br>
+        <span style="font-size: 18px; font-weight: bold; color: #5b5cef;">${data.length}</span>
+      </div>
+      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
+        <strong style="color: #666;">Layak</strong><br>
+        <span style="font-size: 18px; font-weight: bold; color: #10b981;">${data.filter(d => d['Status'] === 'LAYAK').length}</span>
+      </div>
+      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
+        <strong style="color: #666;">Kurang</strong><br>
+        <span style="font-size: 18px; font-weight: bold; color: #f97316;">${data.filter(d => d['Status'] === 'KURANG').length}</span>
+      </div>
+      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
+        <strong style="color: #666;">Bocor</strong><br>
+        <span style="font-size: 18px; font-weight: bold; color: #ef4444;">${data.filter(d => d['Status'] === 'BOCOR').length}</span>
+      </div>
+    </div>
+  `;
+
+  // Table
+  let table = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead>';
+  table += '<tr style="background-color: #5b5cef; color: white;">';
+  Object.keys(data[0]).forEach(key => {
+    table += `<th style="border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px;">${key}</th>`;
+  });
+  table += '</tr></thead><tbody>';
+
+  data.forEach((row, i) => {
+    const bgColor = i % 2 === 0 ? '#fff' : '#f9f9f9';
+    table += `<tr style="background-color: ${bgColor};">`;
+    Object.values(row).forEach(val => {
+      table += `<td style="border: 1px solid #ddd; padding: 8px; font-size: 11px;">${val}</td>`;
+    });
+    table += '</tr>';
+  });
+
+  table += '</tbody></table>';
+
+  element.innerHTML = header + stats + table;
+
+  const opt = {
+    margin: 10,
+    filename: `QC-LPG-${new Date().getTime()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' }
+  };
+
+  html2pdf().set(opt).from(element).save();
+};
+
+window.exportToExcel = function() {
+  const data = getHistoryTableData();
+  if (!data) return;
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(data);
+
+  // Style header
+  const headerRange = XLSX.utils.decode_range(worksheet['!ref']);
+  for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+    worksheet[cellAddress].s = {
+      fill: { fgColor: { rgb: 'FF5B5CEF' } },
+      font: { bold: true, color: { rgb: 'FFFFFFFF' } }
+    };
+  }
+
+  // Set column widths
+  const colWidths = [
+    { wch: 5 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 12 }
+  ];
+  worksheet['!cols'] = colWidths;
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'History');
+  XLSX.writeFile(workbook, `QC-LPG-${new Date().getTime()}.xlsx`);
+};
+
+window.exportToCSV = function() {
+  const data = getHistoryTableData();
+  if (!data) return;
+
+  const headers = Object.keys(data[0]).join(',');
+  const rows = data.map(row => 
+    Object.values(row).map(val => `"${val}"`).join(',')
+  );
+  
+  const csv = [headers, ...rows].join('\\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `QC-LPG-${new Date().getTime()}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
