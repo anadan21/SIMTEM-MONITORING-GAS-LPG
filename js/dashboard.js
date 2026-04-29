@@ -3,6 +3,24 @@ import { ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebas
 
 const $ = id => document.getElementById(id);
 
+// ================= CONFIG =================
+const CFG = {
+  PPM_BOCOR:    50,
+  BERAT_LAYAK:  7.91,
+  BERAT_KURANG: 5.1,
+  BERAT_TABUNG: 5.0,
+  BERAT_MAX:    10.0,
+  PPM_MAX:      2000,
+  ROWS_PER_PAGE: 10,
+};
+
+// ================= PAGINATION STATE =================
+let currentPage = 1;
+let filteredData = [];
+let statusChart = null;
+let historyData = {};
+let stats = { layak: 0, kurang: 0, bocor: 0, total: 0 };
+
 // ================= THEME TOGGLE =================
 function initThemeToggle() {
   const toggle = $('theme-toggle');
@@ -42,49 +60,19 @@ function applyTheme(theme) {
 // Initialize theme on page load
 initThemeToggle();
 
-// ================= CONFIG =================
-const CFG = {
-  PPM_BOCOR:    50,
-  BERAT_LAYAK:  7.91,
-  BERAT_KURANG: 5.1,
-  BERAT_TABUNG: 5.0,
-  BERAT_MAX:    10.0,
-  PPM_MAX:      2000,
-};
-
 // ================= STATUS =================
 const VERDICT = {
-  LAYAK: {
-    cls:  'v-layak',
-    icon: 'LAYAK',
-    code: 'LAYAK JUAL',
-    desc: 'Tabung aman dan sesuai standar.',
-  },
-  KURANG: {
-    cls:  'v-kurang',
-    icon: 'KURANG',
-    code: 'ISI KURANG',
-    desc: 'Isi LPG kurang dari standar.',
-  },
-  BOCOR: {
-    cls:  'v-bocor',
-    icon: 'BOCOR',
-    code: 'GAS BOCOR',
-    desc: 'TERDETEKSI KEBOCORAN GAS!',
-  },
-  KOSONG: {
-    cls:  'v-menunggu',
-    icon: '—',
-    code: 'MENUNGGU',
-    desc: 'Letakkan tabung.',
-  },
+  LAYAK: { cls: 'v-layak', icon: 'LAYAK', code: 'LAYAK JUAL', desc: 'Tabung aman dan sesuai standar.' },
+  KURANG: { cls: 'v-kurang', icon: 'KURANG', code: 'ISI KURANG', desc: 'Isi LPG kurang dari standar.' },
+  BOCOR: { cls: 'v-bocor', icon: 'BOCOR', code: 'GAS BOCOR', desc: 'TERDETEKSI KEBOCORAN GAS!' },
+  KOSONG: { cls: 'v-menunggu', icon: '—', code: 'MENUNGGU', desc: 'Letakkan tabung.' },
 };
 
 // ================= HELPER =================
 function getStatus(ppm, berat) {
   if (berat <= CFG.BERAT_KURANG) return 'KOSONG';
-  if (ppm >= CFG.PPM_BOCOR)      return 'BOCOR';
-  if (berat >= CFG.BERAT_LAYAK)  return 'LAYAK';
+  if (ppm >= CFG.PPM_BOCOR) return 'BOCOR';
+  if (berat >= CFG.BERAT_LAYAK) return 'LAYAK';
   return 'KURANG';
 }
 
@@ -105,6 +93,24 @@ function setEl(id, val) {
   if (el) el.textContent = val;
 }
 
+function formatDate(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleString('id-ID', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function getThemeColor(varName) {
+  const root = document.documentElement;
+  const style = getComputedStyle(root);
+  return style.getPropertyValue('--' + varName).trim();
+}
+
 // ================= VERDICT =================
 function updateVerdict(status) {
   const v = VERDICT[status] || VERDICT.KOSONG;
@@ -122,26 +128,23 @@ function updateVerdict(status) {
   setEl('verdict-desc', v.desc);
 }
 
-// ================= REALTIME =================
+// ================= REALTIME DATA =================
 onValue(ref(db, '/live'), (snap) => {
   const data = snap.val();
   if (!data) return;
 
-  // ✅ FIX: parsing aman
-  const berat = parseFloat(data.berat)    || 0;
-  const isi   = parseFloat(data.isi)      || 0;
-  const ppm   = parseFloat(data.ppm)      || 0;
-  const suhu  = parseFloat(data.suhu)     || 0;
+  const berat = parseFloat(data.berat) || 0;
+  const isi = parseFloat(data.isi) || 0;
+  const ppm = parseFloat(data.ppm) || 0;
+  const suhu = parseFloat(data.suhu) || 0;
   const humid = parseFloat(data.humidity) || 0;
 
-  // ===== TEXT =====
   setEl('val-berat', berat.toFixed(2));
-  setEl('val-isi',   isi.toFixed(2));
-  setEl('val-ppm',   ppm.toFixed(0));
-  setEl('val-suhu',  suhu.toFixed(1));
+  setEl('val-isi', isi.toFixed(2));
+  setEl('val-ppm', ppm.toFixed(0));
+  setEl('val-suhu', suhu.toFixed(1));
   setEl('val-humid', humid.toFixed(0));
 
-  // ===== GAS =====
   const ppmPct = Math.min(100, (ppm / CFG.PPM_MAX) * 100);
   const clr = ppmColor(ppm);
 
@@ -159,9 +162,7 @@ onValue(ref(db, '/live'), (snap) => {
 
   setEl('gas-pct', ppmPct.toFixed(0) + '%');
 
-  // ===== BERAT =====
   const beratPct = Math.min(100, (berat / CFG.BERAT_MAX) * 100);
-
   const wf = document.querySelector('#gauge-track-berat .gauge-fill');
   if (wf) {
     wf.style.width = beratPct + '%';
@@ -171,91 +172,265 @@ onValue(ref(db, '/live'), (snap) => {
   setEl('weight-val', berat.toFixed(2) + ' kg');
   setEl('weight-pct', beratPct.toFixed(0) + '%');
 
-  // ===== STATUS =====
   updateVerdict(getStatus(ppm, berat));
 
-  // ===== TIME (FIX NTP) =====
   if (data.timestamp) {
     let time = Number(data.timestamp);
-
-    // kalau masih millis dari ESP lama
-    if (time < 10000000000) {
-      time = Date.now();
-    }
-
+    if (time < 10000000000) time = Date.now();
     const t = new Date(time);
-    if (!isNaN(t)) {
-      setEl('time-badge', t.toLocaleTimeString('id-ID'));
-    }
+    if (!isNaN(t)) setEl('time-badge', t.toLocaleTimeString('id-ID'));
   }
 
-  // ===== DEVICE =====
-  if (data.device_id) {
-    setEl('footer-device', data.device_id);
-  }
+  if (data.device_id) setEl('footer-device', data.device_id);
 });
 
-// ================= CONNECT =================
+// ================= CONNECTION STATUS =================
 onValue(ref(db, '.info/connected'), (snap) => {
   const badge = $('conn-badge');
   if (!badge) return;
 
   if (snap.val()) {
     badge.textContent = '● ONLINE';
-    badge.className   = 'hchip hchip-conn live';
+    badge.className = 'hchip hchip-conn live';
   } else {
     badge.textContent = '○ OFFLINE';
-    badge.className   = 'hchip hchip-conn offline';
+    badge.className = 'hchip hchip-conn offline';
   }
 });
 
-// ================= HISTORY (REALTIME FIX) =================
-let historyData = {};
-
+// ================= HISTORY DATA =================
 onValue(ref(db, '/history'), (snap) => {
   const data = snap.val();
   if (!data) return;
 
   historyData = data;
-
-  let layak = 0, kurang = 0, bocor = 0, total = 0;
+  stats = { layak: 0, kurang: 0, bocor: 0, total: 0 };
 
   Object.values(data).forEach(r => {
-    total++;
+    stats.total++;
     const s = (r.status || '').toUpperCase();
-
-    if (s === 'LAYAK')  layak++;
-    if (s === 'KURANG') kurang++;
-    if (s === 'BOCOR')  bocor++;
+    if (s === 'LAYAK') stats.layak++;
+    if (s === 'KURANG') stats.kurang++;
+    if (s === 'BOCOR') stats.bocor++;
   });
 
-  setEl('stat-layak', layak);
-  setEl('stat-kurang', kurang);
-  setEl('stat-bocor', bocor);
-  setEl('stat-total', total);
-  setEl('session-count', total);
+  // Update summary stats
+  setEl('summary-total', stats.total);
+  setEl('summary-layak', stats.layak);
+  setEl('summary-kurang', stats.kurang);
+  setEl('summary-bocor', stats.bocor);
 
-  // Update export stats
-  setEl('export-total', total);
-  setEl('export-layak', layak);
-  setEl('export-kurang', kurang);
-  setEl('export-bocor', bocor);
+  // Update chart
+  updateStatusChart();
+
+  // Render table
+  currentPage = 1;
+  applyFiltersAndRender();
+
+  // ✅ Display latest history data on dashboard if live data not available yet
+  const latestEntry = Object.entries(data)
+    .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))[0];
+  
+  if (latestEntry) {
+    const record = latestEntry[1];
+    const berat = parseFloat(record.berat) || 0;
+    const isi = parseFloat(record.isi) || 0;
+    const ppm = parseFloat(record.ppm) || 0;
+    const suhu = parseFloat(record.suhu) || 0;
+    const humid = parseFloat(record.humidity) || 0;
+
+    // Update sensor display with latest history data
+    setEl('val-berat', berat.toFixed(2));
+    setEl('val-isi', isi.toFixed(2));
+    setEl('val-ppm', ppm.toFixed(0));
+    setEl('val-suhu', suhu.toFixed(1));
+    setEl('val-humid', humid.toFixed(0));
+    
+    // Update session count
+    setEl('session-count', stats.total);
+  }
 });
 
-// ================= EXPORT FUNCTIONS =================
-function formatDate(timestamp) {
-  const date = new Date(timestamp);
-  return date.toLocaleString('id-ID', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+// ================= TABLE FUNCTIONS =================
+function getHistoryTableData() {
+  const rows = [];
+  let index = 1;
+
+  Object.entries(historyData)
+    .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))
+    .forEach(([key, record]) => {
+      rows.push({
+        index: index++,
+        timestamp: record.timestamp,
+        berat: parseFloat(record.berat || 0),
+        isi: parseFloat(record.isi || 0),
+        ppm: parseFloat(record.ppm || 0),
+        suhu: parseFloat(record.suhu || 0),
+        humidity: parseFloat(record.humidity || 0),
+        status: (record.status || '—').toUpperCase(),
+        formattedDate: formatDate(record.timestamp)
+      });
+    });
+
+  return rows;
 }
 
-function getHistoryTableData() {
+function applyFiltersAndRender() {
+  const searchText = $('search-input')?.value?.toLowerCase() || '';
+  const statusFilter = $('filter-status')?.value || '';
+
+  const allData = getHistoryTableData();
+
+  filteredData = allData.filter(row => {
+    const matchSearch = !searchText || 
+      row.formattedDate.toLowerCase().includes(searchText) ||
+      row.status.toLowerCase().includes(searchText) ||
+      row.berat.toString().includes(searchText) ||
+      row.ppm.toString().includes(searchText);
+
+    const matchStatus = !statusFilter || row.status === statusFilter;
+
+    return matchSearch && matchStatus;
+  });
+
+  currentPage = 1;
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = $('table-body');
+  if (!tbody) return;
+
+  if (filteredData.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-3);">
+          <i class="fas fa-inbox" style="font-size: 32px; margin-bottom: 10px;"></i><br>
+          Tidak ada data
+        </td>
+      </tr>
+    `;
+    updatePaginationUI();
+    return;
+  }
+
+  const startIdx = (currentPage - 1) * CFG.ROWS_PER_PAGE;
+  const endIdx = startIdx + CFG.ROWS_PER_PAGE;
+  const pageData = filteredData.slice(startIdx, endIdx);
+
+  tbody.innerHTML = pageData.map(row => {
+    const statusClass = row.status.toLowerCase();
+    return `
+      <tr>
+        <td>${row.index}</td>
+        <td>${row.formattedDate}</td>
+        <td>${row.berat.toFixed(2)}</td>
+        <td>${row.isi.toFixed(2)}</td>
+        <td>${row.ppm.toFixed(0)}</td>
+        <td>${row.suhu.toFixed(1)}</td>
+        <td>${row.humidity.toFixed(0)}</td>
+        <td><span class="status-badge ${statusClass}">${row.status}</span></td>
+      </tr>
+    `;
+  }).join('');
+
+  updatePaginationUI();
+}
+
+function updatePaginationUI() {
+  const totalPages = Math.ceil(filteredData.length / CFG.ROWS_PER_PAGE);
+  const startIdx = (currentPage - 1) * CFG.ROWS_PER_PAGE + 1;
+  const endIdx = Math.min(currentPage * CFG.ROWS_PER_PAGE, filteredData.length);
+
+  setEl('pagination-start', filteredData.length === 0 ? 0 : startIdx);
+  setEl('pagination-end', endIdx);
+  setEl('pagination-total', filteredData.length);
+  setEl('current-page', currentPage);
+  setEl('total-pages', totalPages);
+
+  const prevBtn = $('prev-btn');
+  const nextBtn = $('next-btn');
+  if (prevBtn) prevBtn.disabled = currentPage === 1;
+  if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+}
+
+window.previousPage = function() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderTable();
+    window.scrollTo(0, 0);
+  }
+};
+
+window.nextPage = function() {
+  const totalPages = Math.ceil(filteredData.length / CFG.ROWS_PER_PAGE);
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderTable();
+    window.scrollTo(0, 0);
+  }
+};
+
+// ================= SEARCH & FILTER =================
+const searchInput = $('search-input');
+const filterStatus = $('filter-status');
+
+if (searchInput) {
+  searchInput.addEventListener('input', () => applyFiltersAndRender());
+}
+
+if (filterStatus) {
+  filterStatus.addEventListener('change', () => applyFiltersAndRender());
+}
+
+// ================= STATUS CHART =================
+function updateStatusChart() {
+  if (!window.Chart) return;
+
+  const canvas = $('summary-chart-status');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  if (statusChart) {
+    statusChart.data.datasets[0].data = [stats.layak, stats.kurang, stats.bocor];
+    statusChart.update();
+  } else {
+    statusChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Layak', 'Kurang', 'Bocor'],
+        datasets: [{
+          data: [stats.layak, stats.kurang, stats.bocor],
+          backgroundColor: [
+            getThemeColor('ok-light'),
+            getThemeColor('warn-light'),
+            getThemeColor('danger-light')
+          ],
+          borderColor: getThemeColor('surface'),
+          borderWidth: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: getThemeColor('text-3'),
+              padding: 15,
+              font: { size: 12, weight: 'bold' }
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+// ================= EXPORT FUNCTIONS =================
+function getExportData() {
   if (!historyData || Object.keys(historyData).length === 0) {
     alert('Tidak ada data untuk diunduh');
     return null;
@@ -283,126 +458,49 @@ function getHistoryTableData() {
 }
 
 window.exportToPDF = function() {
-  const data = getHistoryTableData();
-  if (!data) return;
-
-  const element = document.createElement('div');
-  element.style.padding = '20px';
-  element.style.fontFamily = 'Arial, sans-serif';
-  
-  // Header
-  const header = `
-    <h1 style="text-align: center; color: #1a2540; margin-bottom: 10px;">Laporan QC Tabung Gas LPG</h1>
-    <p style="text-align: center; color: #666; margin-bottom: 20px;">Pangkalan Gas LPG - ${new Date().toLocaleDateString('id-ID')}</p>
-    <hr style="border: 1px solid #ddd; margin-bottom: 20px;">
-  `;
-
-  // Summary stats
-  const stats = `
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
-      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
-        <strong style="color: #666;">Total Data</strong><br>
-        <span style="font-size: 18px; font-weight: bold; color: #5b5cef;">${data.length}</span>
-      </div>
-      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
-        <strong style="color: #666;">Layak</strong><br>
-        <span style="font-size: 18px; font-weight: bold; color: #10b981;">${data.filter(d => d['Status'] === 'LAYAK').length}</span>
-      </div>
-      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
-        <strong style="color: #666;">Kurang</strong><br>
-        <span style="font-size: 18px; font-weight: bold; color: #f97316;">${data.filter(d => d['Status'] === 'KURANG').length}</span>
-      </div>
-      <div style="border: 1px solid #ddd; padding: 10px; text-align: center;">
-        <strong style="color: #666;">Bocor</strong><br>
-        <span style="font-size: 18px; font-weight: bold; color: #ef4444;">${data.filter(d => d['Status'] === 'BOCOR').length}</span>
-      </div>
-    </div>
-  `;
-
-  // Table
-  let table = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead>';
-  table += '<tr style="background-color: #5b5cef; color: white;">';
-  Object.keys(data[0]).forEach(key => {
-    table += `<th style="border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px;">${key}</th>`;
-  });
-  table += '</tr></thead><tbody>';
-
-  data.forEach((row, i) => {
-    const bgColor = i % 2 === 0 ? '#fff' : '#f9f9f9';
-    table += `<tr style="background-color: ${bgColor};">`;
-    Object.values(row).forEach(val => {
-      table += `<td style="border: 1px solid #ddd; padding: 8px; font-size: 11px;">${val}</td>`;
-    });
-    table += '</tr>';
-  });
-
-  table += '</tbody></table>';
-
-  element.innerHTML = header + stats + table;
-
-  const opt = {
-    margin: 10,
-    filename: `QC-LPG-${new Date().getTime()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' }
-  };
-
-  html2pdf().set(opt).from(element).save();
+  alert('Gunakan Unduh CSV untuk mengunduh data');
 };
 
 window.exportToExcel = function() {
-  const data = getHistoryTableData();
-  if (!data) return;
-
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(data);
-
-  // Style header
-  const headerRange = XLSX.utils.decode_range(worksheet['!ref']);
-  for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
-    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-    worksheet[cellAddress].s = {
-      fill: { fgColor: { rgb: 'FF5B5CEF' } },
-      font: { bold: true, color: { rgb: 'FFFFFFFF' } }
-    };
-  }
-
-  // Set column widths
-  const colWidths = [
-    { wch: 5 },
-    { wch: 18 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 14 },
-    { wch: 12 }
-  ];
-  worksheet['!cols'] = colWidths;
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'History');
-  XLSX.writeFile(workbook, `QC-LPG-${new Date().getTime()}.xlsx`);
+  alert('Gunakan Unduh CSV untuk mengunduh data');
 };
 
 window.exportToCSV = function() {
-  const data = getHistoryTableData();
+  const data = getExportData();
   if (!data) return;
 
-  const headers = Object.keys(data[0]).join(',');
-  const rows = data.map(row => 
-    Object.values(row).map(val => `"${val}"`).join(',')
-  );
+  try {
+    const headers = Object.keys(data[0]);
+    const rows = data.map(row => 
+      headers.map(header => {
+        const val = row[header];
+        const escaped = String(val).replace(/"/g, '""');
+        return `"${escaped}"`;
+      }).join(',')
+    );
+    
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `QC-LPG-${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Gagal mengunduh CSV: ' + err.message);
+  }
+};
+
+// ================= SWITCH CHART TAB =================
+window.switchChartTab = function(tab) {
+  const tabButtons = document.querySelectorAll('.ctab');
+  tabButtons.forEach(btn => btn.classList.remove('active'));
   
-  const csv = [headers, ...rows].join('\\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  
-  link.setAttribute('href', url);
-  link.setAttribute('download', `QC-LPG-${new Date().getTime()}.csv`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const activeBtn = document.querySelector(`[data-tab="${tab}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
 };

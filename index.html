@@ -144,32 +144,6 @@
 
   </div>
 
-  <!-- STATS -->
-  <div class="sec-label">Rekap</div>
-  <div class="stats-row">
-
-    <div class="stat-card">
-      <div>Total</div>
-      <div id="stat-total">0</div>
-    </div>
-
-    <div class="stat-card">
-      <div>Layak</div>
-      <div id="stat-layak">0</div>
-    </div>
-
-    <div class="stat-card">
-      <div>Kurang</div>
-      <div id="stat-kurang">0</div>
-    </div>
-
-    <div class="stat-card">
-      <div>Bocor</div>
-      <div id="stat-bocor">0</div>
-    </div>
-
-  </div>
-
   <!-- CHART -->
   <div class="sec-label">Grafik Realtime</div>
 
@@ -184,46 +158,127 @@
     <canvas id="realtime-chart"></canvas>
   </div>
 
-  <!-- EXPORT DATA -->
-  <div class="sec-label">Unduh Data</div>
+  <!-- DATA HISTORY SECTION -->
+  <div class="sec-label">Data History</div>
+  
+  <!-- DATA SUMMARY CHARTS -->
+  <div class="data-summary-grid">
+    <div class="summary-chart-wrap">
+      <canvas id="summary-chart-status"></canvas>
+    </div>
+    <div class="summary-stats">
+      <div class="summary-stat">
+        <div class="summary-stat-icon" style="color: var(--accent-light);">
+          <i class="fas fa-database"></i>
+        </div>
+        <div>
+          <div class="summary-stat-label">Total Data</div>
+          <div class="summary-stat-value" id="summary-total">0</div>
+        </div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-stat-icon" style="color: var(--ok-light);">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div>
+          <div class="summary-stat-label">Layak</div>
+          <div class="summary-stat-value" id="summary-layak">0</div>
+        </div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-stat-icon" style="color: var(--warn-light);">
+          <i class="fas fa-exclamation-circle"></i>
+        </div>
+        <div>
+          <div class="summary-stat-label">Kurang</div>
+          <div class="summary-stat-value" id="summary-kurang">0</div>
+        </div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-stat-icon" style="color: var(--danger-light);">
+          <i class="fas fa-times-circle"></i>
+        </div>
+        <div>
+          <div class="summary-stat-label">Bocor</div>
+          <div class="summary-stat-value" id="summary-bocor">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA TABLE SECTION -->
+  <div class="data-table-wrap">
+    <div class="table-header">
+      <div class="table-header-left">
+        <h3>Tabel Data Pemeriksaan</h3>
+      </div>
+      <div class="table-header-right">
+        <input type="text" id="search-input" class="table-search" placeholder="Cari data...">
+        <select id="filter-status" class="table-filter">
+          <option value="">Semua Status</option>
+          <option value="LAYAK">Layak</option>
+          <option value="KURANG">Kurang</option>
+          <option value="BOCOR">Bocor</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Tanggal Waktu</th>
+            <th>Berat (kg)</th>
+            <th>Isi (kg)</th>
+            <th>Gas PPM</th>
+            <th>Suhu (°C)</th>
+            <th>Kelembapan (%)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 40px;">
+              <i class="fas fa-spinner fa-spin"></i> Memuat data...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- PAGINATION -->
+    <div class="table-pagination">
+      <div class="pagination-info">
+        <span>Menampilkan <span id="pagination-start">0</span>-<span id="pagination-end">0</span> dari <span id="pagination-total">0</span> data</span>
+      </div>
+      <div class="pagination-controls">
+        <button id="prev-btn" class="pagination-btn" onclick="previousPage()">
+          <i class="fas fa-chevron-left"></i> Sebelumnya
+        </button>
+        <div class="pagination-info-center">
+          Halaman <span id="current-page">1</span> dari <span id="total-pages">1</span>
+        </div>
+        <button id="next-btn" class="pagination-btn" onclick="nextPage()">
+          Selanjutnya <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPORT SECTION -->
+  <div class="sec-label">Ekspor Data</div>
   <div class="export-section">
     <div class="export-header">
-      <h3>Ekspor History</h3>
-      <span class="export-info">Unduh data pemeriksaan dalam format PDF atau Excel</span>
+      <h3>Unduh Data Pemeriksaan</h3>
+      <span class="export-info">Unduh seluruh data dalam berbagai format</span>
     </div>
     
     <div class="export-buttons">
-      <button class="btn-export primary" onclick="exportToPDF()">
-        <i class="fas fa-file-pdf"></i>
-        Unduh PDF
-      </button>
-      <button class="btn-export" onclick="exportToExcel()">
-        <i class="fas fa-file-excel"></i>
-        Unduh Excel
-      </button>
-      <button class="btn-export" onclick="exportToCSV()">
+      <button class="btn-export primary" onclick="exportToCSV()">
         <i class="fas fa-file-csv"></i>
         Unduh CSV
       </button>
-    </div>
-
-    <div class="export-stats">
-      <div class="export-stat">
-        <div class="export-stat-label">Total Data</div>
-        <div class="export-stat-value" id="export-total">0</div>
-      </div>
-      <div class="export-stat">
-        <div class="export-stat-label">Layak</div>
-        <div class="export-stat-value" id="export-layak">0</div>
-      </div>
-      <div class="export-stat">
-        <div class="export-stat-label">Kurang</div>
-        <div class="export-stat-value" id="export-kurang">0</div>
-      </div>
-      <div class="export-stat">
-        <div class="export-stat-label">Bocor</div>
-        <div class="export-stat-value" id="export-bocor">0</div>
-      </div>
     </div>
   </div>
 
