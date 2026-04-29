@@ -233,11 +233,11 @@ onValue(ref(db, '/history'), (snap) => {
   
   if (latestEntry) {
     const record = latestEntry[1];
-    const berat = parseFloat(record.berat) || 0;
-    const isi = parseFloat(record.isi) || 0;
-    const ppm = parseFloat(record.ppm) || 0;
-    const suhu = parseFloat(record.suhu) || 0;
-    const humid = parseFloat(record.humidity) || 0;
+    const berat = parseFloat(record.berat_avg || record.berat || 0);
+    const isi = parseFloat(record.isi_avg || record.isi || 0);
+    const ppm = parseFloat(record.ppm_avg || record.ppm || 0);
+    const suhu = parseFloat(record.suhu_avg || record.suhu || 0);
+    const humid = parseFloat(record.humidity_avg || record.humidity || 0);
 
     // Update sensor display with latest history data
     setEl('val-berat', berat.toFixed(2));
@@ -262,11 +262,11 @@ function getHistoryTableData() {
       rows.push({
         index: index++,
         timestamp: record.timestamp,
-        berat: parseFloat(record.berat || 0),
-        isi: parseFloat(record.isi || 0),
-        ppm: parseFloat(record.ppm || 0),
-        suhu: parseFloat(record.suhu || 0),
-        humidity: parseFloat(record.humidity || 0),
+        berat: parseFloat(record.berat_avg || record.berat || 0),
+        isi: parseFloat(record.isi_avg || record.isi || 0),
+        ppm: parseFloat(record.ppm_avg || record.ppm || 0),
+        suhu: parseFloat(record.suhu_avg || record.suhu || 0),
+        humidity: parseFloat(record.humidity_avg || record.humidity || 0),
         status: (record.status || '—').toUpperCase(),
         formattedDate: formatDate(record.timestamp)
       });
@@ -445,11 +445,11 @@ function getExportData() {
       rows.push({
         'No.': index++,
         'Tanggal Waktu': formatDate(record.timestamp),
-        'Berat (kg)': parseFloat(record.berat || 0).toFixed(2),
-        'Isi (kg)': parseFloat(record.isi || 0).toFixed(2),
-        'Gas PPM': parseFloat(record.ppm || 0).toFixed(0),
-        'Suhu (°C)': parseFloat(record.suhu || 0).toFixed(1),
-        'Kelembapan (%)': parseFloat(record.humidity || 0).toFixed(0),
+        'Berat (kg)': parseFloat(record.berat_avg || record.berat || 0).toFixed(2),
+        'Isi (kg)': parseFloat(record.isi_avg || record.isi || 0).toFixed(2),
+        'Gas PPM': parseFloat(record.ppm_avg || record.ppm || 0).toFixed(0),
+        'Suhu (°C)': parseFloat(record.suhu_avg || record.suhu || 0).toFixed(1),
+        'Kelembapan (%)': parseFloat(record.humidity_avg || record.humidity || 0).toFixed(0),
         'Status': record.status?.toUpperCase() || '—'
       });
     });

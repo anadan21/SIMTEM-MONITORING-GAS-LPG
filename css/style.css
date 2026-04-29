@@ -1267,3 +1267,108 @@ body {
     justify-content: center;
   }
 }
+
+@media(max-width: 480px) {
+  .data-table-wrap {
+    border-radius: var(--r-md);
+    margin-bottom: 20px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .table-header-left h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .table-header-right {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .table-search,
+  .table-filter {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 12px;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    font-size: 12px;
+    min-width: 600px;
+  }
+
+  .data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .data-table thead th {
+    padding: 10px 8px;
+    font-size: 10px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .data-table tbody tr {
+    border-bottom: 1px solid var(--border-2);
+  }
+
+  .data-table tbody td {
+    padding: 10px 8px;
+    color: var(--text-2);
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--surface-3);
+  }
+
+  .status-badge {
+    padding: 4px 10px;
+    font-size: 9px;
+  }
+
+  .table-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .pagination-info {
+    font-size: 11px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .pagination-btn {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 10px;
+    min-width: 60px;
+  }
+
+  .pagination-info-center {
+    font-size: 11px;
+    width: 100%;
+    text-align: center;
+  }
+}

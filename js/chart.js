@@ -148,10 +148,10 @@ function pushData(data) {
   });
 
   history.labels.push(label);
-  history.ppm.push(safeNum(data.ppm));
-  history.berat.push(safeNum(data.berat));
-  history.suhu.push(safeNum(data.suhu));
-  history.humid.push(safeNum(data.humidity));
+  history.ppm.push(safeNum(data.ppm_avg || data.ppm));
+  history.berat.push(safeNum(data.berat_avg || data.berat));
+  history.suhu.push(safeNum(data.suhu_avg || data.suhu));
+  history.humid.push(safeNum(data.humidity_avg || data.humidity));
 
   if (history.labels.length > MAX_POINTS) {
     ['labels','ppm','berat','suhu','humid'].forEach(k => history[k].shift());
