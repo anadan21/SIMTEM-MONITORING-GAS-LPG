@@ -208,8 +208,8 @@ void kirimRaw(float berat,float ppm,float t,float h,String status){
   doc["berat_avg"]=String(berat,2);
   doc["isi_avg"]=String(berat-5.0,2);
   doc["ppm_avg"]=(int)ppm;
-  doc["suhu"]=String(t,1);
-  doc["humidity"]=String(h,1);
+  doc["suhu_avg"]=String(t,1);
+  doc["humidity_avg"]=String(h,1);
   doc["status"]=status;
   doc["timestamp"]=getTS();
   doc["device_id"]="ESP32-LPG-01";
