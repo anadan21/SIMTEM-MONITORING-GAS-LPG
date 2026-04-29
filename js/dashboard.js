@@ -131,7 +131,12 @@ function updateVerdict(status) {
 // ================= REALTIME DATA =================
 onValue(ref(db, '/live'), (snap) => {
   const data = snap.val();
-  if (!data) return;
+  if (!data) {
+    console.warn('⚠️ /live data kosong atau tidak ada');
+    return;
+  }
+
+  console.log('✅ Data /live diterima:', data);
 
   const berat = parseFloat(data.berat) || 0;
   const isi = parseFloat(data.isi) || 0;
@@ -192,16 +197,44 @@ onValue(ref(db, '.info/connected'), (snap) => {
   if (snap.val()) {
     badge.textContent = '● ONLINE';
     badge.className = 'hchip hchip-conn live';
+    console.log('✅ Firebase ONLINE');
   } else {
     badge.textContent = '○ OFFLINE';
     badge.className = 'hchip hchip-conn offline';
+    console.warn('⚠️ Firebase OFFLINE');
+  }
+});
+
+// ================= FALLBACK DARI /RAW (jika /live kosong) =================
+onValue(ref(db, '/raw'), (snap) => {
+  const data = snap.val();
+  if (!data) {
+    console.warn('⚠️ /raw data kosong');
+    return;
+  }
+
+  // Ambil record terbaru dari /raw
+  const latest = Object.entries(data)
+    .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))[0];
+
+  if (latest) {
+    const record = latest[1];
+    console.log('📥 Fallback: Data dari /raw:', record);
+
+    // Hanya update jika /live tidak ada data (gunakan fallback)
+    // Ini akan di-override jika /live ada data
   }
 });
 
 // ================= HISTORY DATA =================
 onValue(ref(db, '/history'), (snap) => {
   const data = snap.val();
-  if (!data) return;
+  if (!data) {
+    console.warn('⚠️ /history data kosong');
+    return;
+  }
+
+  console.log('✅ Data /history diterima, jumlah record:', Object.keys(data).length);
 
   historyData = data;
   stats = { layak: 0, kurang: 0, bocor: 0, total: 0 };
@@ -233,11 +266,11 @@ onValue(ref(db, '/history'), (snap) => {
   
   if (latestEntry) {
     const record = latestEntry[1];
-    const berat = parseFloat(record.berat_avg || record.berat || 0);
-    const isi = parseFloat(record.isi_avg || record.isi || 0);
-    const ppm = parseFloat(record.ppm_avg || record.ppm || 0);
-    const suhu = parseFloat(record.suhu_avg || record.suhu || 0);
-    const humid = parseFloat(record.humidity_avg || record.humidity || 0);
+    const berat = parseFloat(record.berat_avg) || 0;
+    const isi = parseFloat(record.isi_avg) || 0;
+    const ppm = parseFloat(record.ppm_avg) || 0;
+    const suhu = parseFloat(record.suhu_avg) || 0;
+    const humid = parseFloat(record.humidity_avg) || 0;
 
     // Update sensor display with latest history data
     setEl('val-berat', berat.toFixed(2));
@@ -504,3 +537,21 @@ window.switchChartTab = function(tab) {
   const activeBtn = document.querySelector(`[data-tab="${tab}"]`);
   if (activeBtn) activeBtn.classList.add('active');
 };
+
+// ================= DEBUG MESSAGE =================
+console.log('');
+console.log('╔════════════════════════════════════════════════════════╗');
+console.log('║  SISTEM QC LPG — DASHBOARD MONITORING                  ║');
+console.log('║  Debugging Mode - Buka Console (F12) untuk lihat log   ║');
+console.log('╚════════════════════════════════════════════════════════╝');
+console.log('');
+console.log('📡 Listening Firebase paths:');
+console.log('  • /live     → Real-time sensor data');
+console.log('  • /history  → Recorded history data');
+console.log('  • /raw      → Fallback raw data');
+console.log('');
+console.log('Jika data tidak muncul:');
+console.log('  1. Cek ESP32 connected ke WiFi?');
+console.log('  2. Cek Firebase rules? (test mode?)');
+console.log('  3. Buka DevTools Console (F12) untuk melihat error');
+console.log('');

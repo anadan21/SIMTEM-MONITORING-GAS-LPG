@@ -148,10 +148,11 @@ function pushData(data) {
   });
 
   history.labels.push(label);
-  history.ppm.push(safeNum(data.ppm_avg || data.ppm));
-  history.berat.push(safeNum(data.berat_avg || data.berat));
-  history.suhu.push(safeNum(data.suhu_avg || data.suhu));
-  history.humid.push(safeNum(data.humidity_avg || data.humidity));
+  // Data dari /live tidak punya suffix _avg, hanya field biasa
+  history.ppm.push(safeNum(data.ppm));
+  history.berat.push(safeNum(data.berat));
+  history.suhu.push(safeNum(data.suhu));
+  history.humid.push(safeNum(data.humidity));
 
   if (history.labels.length > MAX_POINTS) {
     ['labels','ppm','berat','suhu','humid'].forEach(k => history[k].shift());
@@ -168,7 +169,12 @@ function pushData(data) {
 // ================= REALTIME =================
 onValue(ref(db, '/live'), snap => {
   const data = snap.val();
-  if (data) pushData(data);
+  if (data) {
+    console.log('📊 Chart menerima data /live:', data);
+    pushData(data);
+  } else {
+    console.warn('⚠️ Chart: /live data kosong');
+  }
 });
 
 // ================= GLOBAL =================
@@ -186,3 +192,5 @@ if (document.readyState === 'loading') {
 } else {
   initChart();
 }
+
+console.log('📊 Chart.js loaded - Listening to /live for realtime data');
