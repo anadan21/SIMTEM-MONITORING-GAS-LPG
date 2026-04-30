@@ -30,13 +30,14 @@ DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ================= MQ6 =================
-float R0 = 18.64;
+float R0 = 30.7;
 const float RL = 10.0;
 const float A  = 1000.0;
 const float B  = -2.186;
 
 // ================= CONFIG =================
-#define SAMPLE_COUNT 15
+#define SAMPLE_COUNT 12
+const float HX711_SCALE = 23656.0;  // Hasil kalibrasi linier
 
 float bufferBerat[SAMPLE_COUNT];
 float bufferPPM[SAMPLE_COUNT];
@@ -280,7 +281,7 @@ void setup(){
   while(time(nullptr)<100000) delay(500);
 
   scale.begin(HX_DT,HX_SCK);
-  scale.set_scale(23483.0);
+  scale.set_scale(HX711_SCALE);
   scale.tare();
 
   dht.begin();
@@ -307,8 +308,20 @@ void loop(){
 
   updateTraffic(status);
 
-  lcdCenter("T:"+String(berat,2)+" I:"+String(isi,2),0);
-  lcdCenter(String((int)ppm)+"ppm "+status,1);
+  // 📺 Update LCD dengan status real-time
+  if(locked){
+    // Saat data sudah di-lock/siap
+    lcdCenter("STATUS: "+status,0);
+    lcdCenter("Angkat tabung",1);
+  } else if(berat > 5.1 && bufferFull){
+    // Saat sedang stabilisasi
+    lcdCenter("Stabilizing...",0);
+    lcdCenter("Jangan gerak!",1);
+  } else {
+    // Normal monitoring
+    lcdCenter("T:"+String(berat,2)+" I:"+String(isi,2),0);
+    lcdCenter(String((int)ppm)+"ppm "+status,1);
+  }
 
   // SAMPLE
   bufferBerat[sampleIndex]=berat;
@@ -320,18 +333,19 @@ void loop(){
     bufferFull=true;
   }
 
-  // LIVE
+  // LIVE (Kirim real-time setiap 1 detik)
   if(millis()-lastLive>1000){
     kirimLive(berat,isi,ppm,t,h,status);
     lastLive=millis();
+    Serial.print("📡 Live: ");
+    Serial.print(berat,2); Serial.print(" kg, ");
+    Serial.print(ppm,0); Serial.println(" ppm");
   }
 
-  // ===== LOCK (FIX FINAL) =====
+  // ===== LOCK (SAAT DATA STABIL & DIKIRIM) =====
   if(berat>5.1 && bufferFull && !locked){
 
-    if(isStable(bufferBerat,0.1)){ // 🔥 FIX UTAMA
-
-      Serial.println("LOCK TERJADI");
+    if(isStable(bufferBerat,0.1)){ // 🔥 Data stabil
 
       b_lock=avg(bufferBerat);
       ppm_lock=avg(bufferPPM);
@@ -343,23 +357,43 @@ void loop(){
       sent=false;
       adaTabung=true;
 
-      beep1();
+      Serial.println("✅ LOCK TERJADI - Mengirim data...");
 
+      // Kirim ke Firebase
       kirimRaw(b_lock,ppm_lock,t,h,status_lock);
       kirimHistory();
+
+      // 🔊 BUNYI 1 KALI = Data sudah dikirim (READY)
+      delay(100);
+      beep1();
+      delay(100);
+      
+      Serial.println("🔊 BEEP 1x - Data terkirim, siap pengecekan");
     }
   }
 
-  // ANGKAT
+  // ===== ANGKAT (SAAT TABUNG DIANGKAT) =====
   if(adaTabung && berat<1.0 && locked && !sent){
 
+    Serial.println("⬆️ TABUNG DIANGKAT");
+
+    delay(200);
+
+    // 🔊 BUNYI 2 KALI = Pengecekan selesai, siap pengecekan baru
     beep2();
+    delay(200);
 
     sent=true;
     locked=false;
     adaTabung=false;
     bufferFull=false;
+    sampleIndex=0;
+
+    Serial.println("🔊 BEEP 2x - Pengecekan selesai, siap pengecekan berikutnya");
+    
+    lcdCenter("Letakkan tabung",0);
+    lcdCenter("untuk pengecekan",1);
   }
 
-  delay(500);
+  delay(700);
 }
