@@ -30,7 +30,7 @@ DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ================= MQ6 =================
-float R0 = 30.7;
+float R0 = 17,89;
 const float RL = 10.0;
 const float A  = 1000.0;
 const float B  = -2.186;
