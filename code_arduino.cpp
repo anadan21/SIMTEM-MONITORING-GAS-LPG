@@ -36,7 +36,7 @@ const float A  = 1000.0;
 const float B  = -2.186;
 
 // ================= CONFIG =================
-#define SAMPLE_COUNT 12
+#define SAMPLE_COUNT 10
 const float HX711_SCALE = 23656.0;  // Hasil kalibrasi linier
 
 float bufferBerat[SAMPLE_COUNT];
@@ -357,26 +357,28 @@ void loop(){
       sent=false;
       adaTabung=true;
 
-      Serial.println("✅ LOCK TERJADI - Mengirim data...");
+      Serial.println("✅ LOCK TERJADI - Mengirim ke /raw...");
 
-      // Kirim ke Firebase
+      // Kirim ke Firebase /raw (log data)
       kirimRaw(b_lock,ppm_lock,t,h,status_lock);
-      kirimHistory();
 
       // 🔊 BUNYI 1 KALI = Data sudah dikirim (READY)
       delay(100);
       beep1();
       delay(100);
       
-      Serial.println("🔊 BEEP 1x - Data terkirim, siap pengecekan");
+      Serial.println("🔊 BEEP 1x - Data terkirim ke /raw, siap pengecekan");
     }
   }
 
   // ===== ANGKAT (SAAT TABUNG DIANGKAT) =====
   if(adaTabung && berat<1.0 && locked && !sent){
 
-    Serial.println("⬆️ TABUNG DIANGKAT");
+    Serial.println("⬆️ TABUNG DIANGKAT - Mengirim ke /history...");
 
+    // Kirim ke Firebase /history (final record)
+    kirimHistory();
+    
     delay(200);
 
     // 🔊 BUNYI 2 KALI = Pengecekan selesai, siap pengecekan baru
@@ -389,7 +391,7 @@ void loop(){
     bufferFull=false;
     sampleIndex=0;
 
-    Serial.println("🔊 BEEP 2x - Pengecekan selesai, siap pengecekan berikutnya");
+    Serial.println("🔊 BEEP 2x - Pengecekan selesai, data tersimpan di /history");
     
     lcdCenter("Letakkan tabung",0);
     lcdCenter("untuk pengecekan",1);
