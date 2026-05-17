@@ -133,7 +133,7 @@ bool isStable(float arr[], float threshold){
 
 // ================= STATUS =================
 String getStatus(float ppm, float berat){
-  if(berat <= 5.1) return "KOSONG";
+  if(berat <= 4.0) return "KOSONG";
   if(ppm >= 50) return "BOCOR";
   if(berat >= 7.91) return "LAYAK";
   return "KURANG";
