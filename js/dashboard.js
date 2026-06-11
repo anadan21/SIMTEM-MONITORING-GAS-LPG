@@ -111,6 +111,56 @@ function getThemeColor(varName) {
   return style.getPropertyValue('--' + varName).trim();
 }
 
+// ================= EXTERNAL LIB LOADER =================
+async function loadExternalScript(src) {
+  return new Promise((resolve, reject) => {
+    try {
+      const existing = Array.from(document.getElementsByTagName('script')).find(s => s.src && s.src.indexOf(src) !== -1);
+      if (existing) return resolve(existing);
+
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve(s);
+      s.onerror = () => reject(new Error('Failed to load script: ' + src));
+      document.head.appendChild(s);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function ensureLibrary(name, src, globalName, timeout = 5000) {
+  if (globalName) {
+    if (globalName === 'jspdf' && window.jspdf && window.jspdf.jsPDF) return window.jspdf;
+    if (window[globalName]) return window[globalName];
+  }
+
+  try {
+    await loadExternalScript(src);
+  } catch (err) {
+    throw new Error(name + ' failed to load: ' + err.message);
+  }
+
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (globalName) {
+      if (globalName === 'jspdf' && window.jspdf && window.jspdf.jsPDF) return window.jspdf;
+      if (window[globalName]) return window[globalName];
+    } else {
+      break;
+    }
+    // wait a bit for UMD factories to attach
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  if (globalName && window[globalName]) return window[globalName];
+  if (globalName === 'jspdf' && window.jspdf && window.jspdf.jsPDF) return window.jspdf;
+
+  throw new Error(name + ' did not initialize in time');
+}
+
 // ================= VERDICT =================
 function updateVerdict(status) {
   const v = VERDICT[status] || VERDICT.KOSONG;
@@ -462,108 +512,20 @@ function updateStatusChart() {
 
 // ================= EXPORT FUNCTIONS =================
 function getExportData() {
-  if (!historyData || Object.keys(historyData).length === 0) {
-    alert('Tidak ada data untuk diunduh');
-    return null;
-  }
+  const rows = getHistoryTableData();
+  if (!rows || rows.length === 0) return null;
 
-  const rows = [];
-  let index = 1;
-
-  Object.entries(historyData)
-    .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))
-    .forEach(([key, record]) => {
-      rows.push({
-        'No.': index++,
-        'Tanggal Waktu': formatDate(record.timestamp),
-        'Berat (kg)': parseFloat(record.berat_avg || record.berat || 0).toFixed(2),
-        'Isi (kg)': parseFloat(record.isi_avg || record.isi || 0).toFixed(2),
-        'Gas PPM': parseFloat(record.ppm_avg || record.ppm || 0).toFixed(0),
-        'Suhu (°C)': parseFloat(record.suhu_avg || record.suhu || 0).toFixed(1),
-        'Kelembapan (%)': parseFloat(record.humidity_avg || record.humidity || 0).toFixed(0),
-        'Status': record.status?.toUpperCase() || '—'
-      });
-    });
-
-  return rows;
+  return rows.map(r => ({
+    No: r.index,
+    Tanggal: r.formattedDate,
+    Berat: r.berat,
+    Isi: r.isi,
+    PPM: r.ppm,
+    Suhu: r.suhu,
+    Humidity: r.humidity,
+    Status: r.status
+  }));
 }
-
-function loadExternalScript(src) {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) {
-      existing.addEventListener('load', () => resolve(true));
-      existing.addEventListener('error', () => reject(new Error(`Gagal memuat script: ${src}`)));
-      if (existing.readyState === 'complete' || existing.readyState === 'loaded') {
-        resolve(true);
-      }
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = false;
-    script.onload = () => resolve(true);
-    script.onerror = () => reject(new Error(`Gagal memuat script: ${src}`));
-    document.head.appendChild(script);
-  });
-}
-
-async function ensureLibrary(name, src, globalName) {
-  if (window[globalName]) return window[globalName];
-  await loadExternalScript(src);
-  if (!window[globalName]) throw new Error(`${name} tidak tersedia setelah memuat script`);
-  return window[globalName];
-}
-
-window.exportToPDF = async function() {
-  const data = getExportData();
-  if (!data) return;
-
-  let html2pdfLib;
-  try {
-    html2pdfLib = await ensureLibrary('HTML2PDF', 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js', 'html2pdf');
-  } catch (err) {
-    alert(err.message);
-    return;
-  }
-
-  const container = document.createElement('div');
-  container.style.padding = '18px';
-  container.style.fontFamily = 'Arial, sans-serif';
-  container.style.background = 'white';
-  container.style.width = '1000px';
-  container.style.boxSizing = 'border-box';
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.innerHTML = `
-    <h2 style="margin-bottom: 16px; font-size: 18px;">Data Pemeriksaan LPG</h2>
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 12px;">
-      <thead>
-        <tr>${Object.keys(data[0]).map(header => `<th style="background: #f3f3f3; text-align: left;">${header}</th>`).join('')}</tr>
-      </thead>
-      <tbody>
-        ${data.map(row => `<tr>${Object.values(row).map(value => `<td>${String(value)}</td>`).join('')}</tr>`).join('')}
-      </tbody>
-    </table>
-  `;
-  document.body.appendChild(container);
-
-  try {
-    await html2pdfLib().set({
-      margin: 10,
-      filename: `QC-LPG-${new Date().getTime()}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-    }).from(container).save();
-  } catch (err) {
-    alert('Gagal mengunduh PDF: ' + err.message);
-  } finally {
-    document.body.removeChild(container);
-  }
-};
 
 window.exportToExcel = async function() {
   const data = getExportData();
@@ -571,7 +533,11 @@ window.exportToExcel = async function() {
 
   let XLSX;
   try {
-    XLSX = await ensureLibrary('XLSX', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX');
+    try {
+      XLSX = await ensureLibrary('XLSX', '/js/lib/xlsx.full.min.js', 'XLSX');
+    } catch (_) {
+      XLSX = await ensureLibrary('XLSX', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX');
+    }
   } catch (err) {
     alert(err.message);
     return;
@@ -597,35 +563,82 @@ window.exportToExcel = async function() {
   }
 };
 
-window.exportToCSV = function() {
+window.exportToPDF = async function() {
   const data = getExportData();
-  if (!data) return;
+  if (!data) {
+    alert('Tidak ada data untuk diunduh');
+    return;
+  }
 
   try {
+    let jsPDFLib;
+    try {
+      jsPDFLib = await ensureLibrary('jsPDF', '/js/lib/jspdf.umd.min.js', 'jspdf');
+    } catch (_) {
+      jsPDFLib = await ensureLibrary('jsPDF', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jspdf');
+    }
+
+    const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!jsPDFClass) {
+      alert('jsPDF tidak tersedia');
+      return;
+    }
+
+    const doc = new jsPDFClass({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const margin = 10;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const headers = Object.keys(data[0]);
-    const rows = data.map(row => 
-      headers.map(header => {
-        const val = row[header];
-        const escaped = String(val).replace(/"/g, '""');
-        return `"${escaped}"`;
-      }).join(',')
-    );
-    
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `QC-LPG-${new Date().getTime()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const colCount = headers.length;
+    const colWidth = (pageWidth - margin * 2) / colCount;
+    const lineHeight = 7;
+
+    doc.setFontSize(14);
+    doc.text('Data Pemeriksaan LPG', pageWidth / 2, margin + 4, { align: 'center' });
+    let y = margin + 12;
+
+    // Header row
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(10);
+    headers.forEach((h, i) => {
+      doc.text(String(h), margin + i * colWidth + 2, y);
+    });
+    doc.setFont(undefined, 'normal');
+    y += lineHeight;
+
+    // Data rows
+    for (let r = 0; r < data.length; r++) {
+      const row = data[r];
+      let maxLines = 1;
+      const cellLines = headers.map((h) => {
+        const txt = String(row[h] ?? '');
+        const lines = doc.splitTextToSize(txt, colWidth - 4);
+        maxLines = Math.max(maxLines, lines.length);
+        return lines;
+      });
+
+      if (y + lineHeight * maxLines > pageHeight - margin) {
+        doc.addPage();
+        y = margin + 8;
+      }
+
+      headers.forEach((h, i) => {
+        const lines = cellLines[i];
+        doc.text(lines, margin + i * colWidth + 2, y);
+      });
+
+      y += lineHeight * maxLines;
+    }
+
+    doc.save(`QC-LPG-${Date.now()}.pdf`);
   } catch (err) {
-    alert('Gagal mengunduh CSV: ' + err.message);
+    console.error('PDF export error:', err);
+    alert('Gagal mengunduh PDF: ' + err.message);
   }
+};
+
+window.exportToCSV = function() {
+  // CSV export removed — not used anymore
 };
 
 // ================= SWITCH CHART TAB =================
