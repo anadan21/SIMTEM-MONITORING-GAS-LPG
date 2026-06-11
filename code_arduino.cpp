@@ -30,14 +30,14 @@ DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ================= MQ6 =================
-float R0 = 17,89;
+float R0 = 17.89;
 const float RL = 10.0;
 const float A  = 1000.0;
 const float B  = -2.186;
 
 // ================= CONFIG =================
 #define SAMPLE_COUNT 10
-const float HX711_SCALE = 23656.0;  // Hasil kalibrasi linier
+const float HX711_SCALE = 23483.0;  // Hasil kalibrasi linier
 
 float bufferBerat[SAMPLE_COUNT];
 float bufferPPM[SAMPLE_COUNT];
@@ -133,10 +133,10 @@ bool isStable(float arr[], float threshold){
 
 // ================= STATUS =================
 String getStatus(float ppm, float berat){
-  if(berat <= 4.0) return "KOSONG";
-  if(ppm >= 50) return "BOCOR";
-  if(berat >= 7.91) return "LAYAK";
-  return "KURANG";
+  if(ppm >= 50) return "BOCOR";           // Prioritas: cek bocor dulu
+  if(berat <= 6.0) return "KOSONG";       // Tabung kosong (4-6 kg)
+  if(berat >= 7.91) return "LAYAK";       // Tabung layak (>= 7.91 kg)
+  return "KURANG";                        // Sisanya: kurang (6-7.91 kg)
 }
 
 // ================= TRAFFIC =================
@@ -313,7 +313,7 @@ void loop(){
     // Saat data sudah di-lock/siap
     lcdCenter("STATUS: "+status,0);
     lcdCenter("Angkat tabung",1);
-  } else if(berat > 5.1 && bufferFull){
+  } else if(berat > 4.0 && bufferFull){
     // Saat sedang stabilisasi
     lcdCenter("Stabilizing...",0);
     lcdCenter("Jangan gerak!",1);
@@ -343,7 +343,7 @@ void loop(){
   }
 
   // ===== LOCK (SAAT DATA STABIL & DIKIRIM) =====
-  if(berat>5.1 && bufferFull && !locked){
+  if(berat>4.0 && bufferFull && !locked){
 
     if(isStable(bufferBerat,0.1)){ // 🔥 Data stabil
 

@@ -32,13 +32,12 @@
       <div class="brand-badge">PANGKALAN LPG</div>
       <div>
         <div class="brand-title">Sistem QC Tabung Gas</div>
-        <div class="brand-sub">IoT Monitoring — ESP32 + MQ-6 + HX711</div>
+        <div class="brand-sub">IoT Monitoring</div>
       </div>
     </div>
 
     <div class="header-right">
       <div class="hchip hchip-time" id="time-badge">—</div>
-      <div class="hchip hchip-conn" id="conn-badge">○ FIREBASE</div>
       <button class="theme-toggle" id="theme-toggle" title="Toggle Dark/Light Mode">
         <i class="fas fa-moon"></i>
       </button>
@@ -278,6 +277,14 @@
       <button class="btn-export primary" onclick="exportToCSV()">
         <i class="fas fa-file-csv"></i>
         Unduh CSV
+      </button>
+      <button class="btn-export secondary" onclick="exportToExcel()">
+        <i class="fas fa-file-excel"></i>
+        Unduh Excel
+      </button>
+      <button class="btn-export secondary" onclick="exportToPDF()">
+        <i class="fas fa-file-pdf"></i>
+        Unduh PDF
       </button>
     </div>
   </div>

@@ -391,7 +391,6 @@ window.previousPage = function() {
   if (currentPage > 1) {
     currentPage--;
     renderTable();
-    window.scrollTo(0, 0);
   }
 };
 
@@ -400,7 +399,6 @@ window.nextPage = function() {
   if (currentPage < totalPages) {
     currentPage++;
     renderTable();
-    window.scrollTo(0, 0);
   }
 };
 
@@ -490,12 +488,113 @@ function getExportData() {
   return rows;
 }
 
-window.exportToPDF = function() {
-  alert('Gunakan Unduh CSV untuk mengunduh data');
+function loadExternalScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => reject(new Error(`Gagal memuat script: ${src}`)));
+      if (existing.readyState === 'complete' || existing.readyState === 'loaded') {
+        resolve(true);
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = false;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error(`Gagal memuat script: ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureLibrary(name, src, globalName) {
+  if (window[globalName]) return window[globalName];
+  await loadExternalScript(src);
+  if (!window[globalName]) throw new Error(`${name} tidak tersedia setelah memuat script`);
+  return window[globalName];
+}
+
+window.exportToPDF = async function() {
+  const data = getExportData();
+  if (!data) return;
+
+  let html2pdfLib;
+  try {
+    html2pdfLib = await ensureLibrary('HTML2PDF', 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js', 'html2pdf');
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+
+  const container = document.createElement('div');
+  container.style.padding = '18px';
+  container.style.fontFamily = 'Arial, sans-serif';
+  container.style.background = 'white';
+  container.style.width = '1000px';
+  container.style.boxSizing = 'border-box';
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.innerHTML = `
+    <h2 style="margin-bottom: 16px; font-size: 18px;">Data Pemeriksaan LPG</h2>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 12px;">
+      <thead>
+        <tr>${Object.keys(data[0]).map(header => `<th style="background: #f3f3f3; text-align: left;">${header}</th>`).join('')}</tr>
+      </thead>
+      <tbody>
+        ${data.map(row => `<tr>${Object.values(row).map(value => `<td>${String(value)}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+  document.body.appendChild(container);
+
+  try {
+    await html2pdfLib().set({
+      margin: 10,
+      filename: `QC-LPG-${new Date().getTime()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    }).from(container).save();
+  } catch (err) {
+    alert('Gagal mengunduh PDF: ' + err.message);
+  } finally {
+    document.body.removeChild(container);
+  }
 };
 
-window.exportToExcel = function() {
-  alert('Gunakan Unduh CSV untuk mengunduh data');
+window.exportToExcel = async function() {
+  const data = getExportData();
+  if (!data) return;
+
+  let XLSX;
+  try {
+    XLSX = await ensureLibrary('XLSX', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX');
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+
+  try {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.href = url;
+    link.download = `QC-LPG-${new Date().getTime()}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Gagal mengunduh Excel: ' + err.message);
+  }
 };
 
 window.exportToCSV = function() {
